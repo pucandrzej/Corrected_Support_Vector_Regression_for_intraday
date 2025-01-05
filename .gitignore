@@ -1,0 +1,19 @@
+# ignore folder with data that is not publish
+Data/Day-Ahead_Auction
+Data/ID_auction_preprocessed 
+Data/Indices
+Data/Intraday_Auction
+Data/Polish_data
+Data/Transactions
+Data/preprocessed_dataset.csv
+**/__pycache__/
+# ignore the python env
+contmarket311
+# ignore the forecasting results (too big & changing a lot ;))
+Forecasting/RESULTS_DUMP
+Forecasting/RESULTS
+SLIDE_SHOW_IMAGES
+Forecasting/data_ID.db
+# monte carlo study (separate study to check the behavior of cSVR on simulated data)
+MC_STUDY_SUBREPO/MC_RESULTS/
+Forecasting/EARLY_DEVELOPMENT_AND_TRIES_DUMP
