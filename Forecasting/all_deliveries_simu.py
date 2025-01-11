@@ -12,20 +12,19 @@ import os
 import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument('--start_delivery', default=0, help='Start of the simulated deliveries')
-parser.add_argument('--end_delivery', default=96, help='End of the simulated deliveries')
+parser.add_argument('--end_delivery', default=96, help='End + 1 of the simulated deliveries')
 parser.add_argument('--models', default=['kernel_hr_naive_mult', 'lasso', 'random_forest'], help='Models to simulate.')
 parser.add_argument('--calibration_window_len', default=28, help='For every date consider a historical results from a calibration window.')
-parser.add_argument('--kernel_solver', default='SVR', help='Solving regression based on the kernel input.')
+parser.add_argument('--kernel_solver', default='SVR', help='Model to use: KRR or SVR')
 args = parser.parse_args()
+
 for model in args.models:
     start = args.start_delivery
     joblist = []
     sys.stderr = open(f'TOTAL_SIMU_ERR_{start}_{args.end_delivery}_{model}_{args.calibration_window_len}_{args.kernel_solver}.txt', 'w')
     sys.stdout = open(f'TOTAL_SIMU_LOG_{start}_{args.end_delivery}_{model}_{args.calibration_window_len}_{args.kernel_solver}.txt', 'w')
     for shift_trade in [30, 90, 180]: # delivery time - shift_trade is the trade time
-        deliveries_recalc = [0, 48, 95]
-
-        for delivery_time in deliveries_recalc:
+        for delivery_time in range(int(args.start_delivery), int(args.end_delivery)):
             trade_time = delivery_time*15 + 8*60 - shift_trade
             for variable_set in [11]:
                 processes = 30
