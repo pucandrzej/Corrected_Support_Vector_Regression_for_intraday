@@ -30,7 +30,6 @@ def is_date_of_DSTtransition(dt: datetime, zone: str) -> bool:
 
 
 def initial_preprocessing():
-
     if not os.path.exists("../Data/Transactions/price_analysis_table.csv"):
         # load the complete dataset
         if not os.path.exists("../Data/Transactions/concatenated_table.csv"):
@@ -173,9 +172,7 @@ def initial_preprocessing():
         )
         & (df_copy["Datetime offer time"].dt.date != df_copy["Datetime from"].dt.date),
         "Datetime offer time",
-    ] + timedelta(
-        hours=1
-    )
+    ] + timedelta(hours=1)
 
     # # shift winter by 1h
     df_copy.loc[
@@ -198,9 +195,7 @@ def initial_preprocessing():
             )
         ),
         "Datetime offer time",
-    ] + timedelta(
-        hours=1
-    )
+    ] + timedelta(hours=1)
 
     # # shift summer by 2h
     df_copy.loc[
@@ -211,9 +206,7 @@ def initial_preprocessing():
         (df_copy["Datetime from"] >= datetime(day=29, month=3, year=2020, hour=3))
         | (df_copy["Datetime from"] < datetime(day=25, month=10, year=2020, hour=3)),
         "Datetime offer time",
-    ] + timedelta(
-        hours=2
-    )
+    ] + timedelta(hours=2)
 
     # add the weekdays
     dates = pd.date_range(
@@ -379,18 +372,17 @@ def preprocess_data(start, end, ID_qtrly, add_dummies):
             time_to_delivery = time_to_delivery[::-1]
             price = price[::-1]
             trading_start = (
-                pd.to_datetime(delivery)
-                - (pd.to_datetime(delivery) - timedelta(days=1))
-                .replace(hour=16)
-                .replace(minute=0)
-            ).total_seconds() / 60  # trading starts at 16:00 each day - we compute this date and time as minutes to delivery
+                (
+                    pd.to_datetime(delivery)
+                    - (pd.to_datetime(delivery) - timedelta(days=1))
+                    .replace(hour=16)
+                    .replace(minute=0)
+                ).total_seconds()
+                / 60
+            )  # trading starts at 16:00 each day - we compute this date and time as minutes to delivery
             if trading_start > np.max(time_to_delivery):
                 price = [
-                    float(
-                        ID_qtrly[ID_qtrly.index == delivery][
-                            "price"
-                        ].to_numpy()[0]
-                    )
+                    float(ID_qtrly[ID_qtrly.index == delivery]["price"].to_numpy()[0])
                 ] + price
                 time_to_delivery = [trading_start] + time_to_delivery
             end = 0
@@ -511,6 +503,7 @@ def preprocess_data(start, end, ID_qtrly, add_dummies):
 
         print(f"Done {d} of {len(np.unique(df['Datetime from'].dt.date))}")
 
+
 if __name__ == "__main__":
     if not os.path.exists("data_ID.db"):
         con = sqlite3.connect("data_ID.db")
@@ -518,7 +511,11 @@ if __name__ == "__main__":
         os.remove("data_ID.db")
         con = sqlite3.connect("data_ID.db")
 
-    ID_qtrly = pd.read_csv("../Data/ID_auction_preprocessed/ID_auction_price_2018-2020_preproc.csv", index_col=0, parse_dates=True)
+    ID_qtrly = pd.read_csv(
+        "../Data/ID_auction_preprocessed/ID_auction_price_2018-2020_preproc.csv",
+        index_col=0,
+        parse_dates=True,
+    )
 
     preprocess_data(
         datetime(2018, 11, 1, 0, 0, 0),

@@ -1,5 +1,6 @@
 import psutil
 
+
 def wait_for_low_cpu(threshold=10, interval=300):
     """
     Waits until the CPU usage is below the threshold for a specified duration.
@@ -17,6 +18,7 @@ def wait_for_low_cpu(threshold=10, interval=300):
 
         if cpu_usage < threshold:
             break
+
 
 if __name__ == "__main__":
     wait_for_low_cpu()

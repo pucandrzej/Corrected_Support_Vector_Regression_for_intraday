@@ -1,9 +1,12 @@
 import numpy as np
 
+
 def generate_AR(alpha, beta, sample_len, seed, shock=True):
     Y = [0]
 
-    rng = np.random.default_rng(seed=seed) # important: works only by setting it before every generation
+    rng = np.random.default_rng(
+        seed=seed
+    )  # important: works only by setting it before every generation
     random_vector = rng.normal(0, 1, sample_len)
     rng = np.random.default_rng(seed=seed)
     random_vector_uniform = rng.uniform(size=sample_len)
@@ -38,11 +41,11 @@ def generate_AR(alpha, beta, sample_len, seed, shock=True):
     shocks = [0]
     for i in range(1, sample_len):
         ar_shock = 0
-        if random_vector_uniform[i] < shock_risk/2:
+        if random_vector_uniform[i] < shock_risk / 2:
             ar_shock = shock_val
-        elif random_vector_uniform[i] >= 1 - shock_risk/2:
+        elif random_vector_uniform[i] >= 1 - shock_risk / 2:
             ar_shock = -shock_val
-        Y.append(alpha*Y[i - 1] + beta + random_vector[i])
+        Y.append(alpha * Y[i - 1] + beta + random_vector[i])
         shocks.append(ar_shock)
 
     if shock:
@@ -50,10 +53,13 @@ def generate_AR(alpha, beta, sample_len, seed, shock=True):
     else:
         return np.array(Y)
 
+
 def generate_ARX(alpha, beta, X, sample_len, seed, shock=True):
     Y = [0]
 
-    rng = np.random.default_rng(seed=seed) # important: works only by setting it before every generation
+    rng = np.random.default_rng(
+        seed=seed
+    )  # important: works only by setting it before every generation
     random_vector = rng.normal(0, 1, sample_len)
     rng = np.random.default_rng(seed=seed)
     random_vector_uniform = rng.uniform(size=sample_len)
@@ -64,11 +70,11 @@ def generate_ARX(alpha, beta, X, sample_len, seed, shock=True):
     shocks = [0]
     for i in range(1, sample_len):
         ar_shock = 0
-        if random_vector_uniform[i] < shock_risk/2:
+        if random_vector_uniform[i] < shock_risk / 2:
             ar_shock = shock_val
-        elif random_vector_uniform[i] >= 1 - shock_risk/2:
+        elif random_vector_uniform[i] >= 1 - shock_risk / 2:
             ar_shock = -shock_val
-        base_value = alpha*Y[i - 1] + beta + random_vector[i]
+        base_value = alpha * Y[i - 1] + beta + random_vector[i]
         for v in X:
             base_value += v[i]
         Y.append(base_value)
@@ -79,6 +85,7 @@ def generate_ARX(alpha, beta, X, sample_len, seed, shock=True):
     else:
         return np.array(Y)
 
+
 def generate_ARX_multiexog(alpha, exog_coeff, beta, X, sample_len, seed, shock=False):
     Y = [0]  # Initialize the AR component
     rng = np.random.default_rng(seed=seed)
@@ -88,14 +95,14 @@ def generate_ARX_multiexog(alpha, exog_coeff, beta, X, sample_len, seed, shock=F
     shock_risk = 0.05
     shock_val = 3
     shocks = [0]
-    
+
     for i in range(1, sample_len):
         ar_shock = 0
         if random_vector_uniform[i] < shock_risk / 2:
             ar_shock = shock_val
         elif random_vector_uniform[i] >= 1 - shock_risk / 2:
             ar_shock = -shock_val
-        
+
         base_value = alpha[0] * Y[i - 1] + beta + random_vector[i]
         base_value += sum(exog_coeff[idx] * X[idx][i] for idx in range(len(X)))
         Y.append(base_value)
