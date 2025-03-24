@@ -1,6 +1,5 @@
 import numpy as np
 
-
 def remove_zerovar(X):
     removed_zerovar_foreday = []
     if len(np.where(~X[-1, :, :].any(axis=1))[0]) > 0:

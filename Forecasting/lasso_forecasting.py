@@ -687,7 +687,7 @@ def run_one_day(inp):
     elif model == "random_forest":
         regr = RandomForestRegressor(
             n_estimators=256, max_depth=8
-        )  # tips on parameters: https://stats.stackexchange.com/questions/189344/choosing-random-forests-parameters
+        )  
         regr.fit(X[:-1, :], Y_standarized)
         pred = regr.predict(X[np.newaxis, -1, :])
         results["insample MAE"] = [my_mae(regr.predict(X[:-1, :]), Y_standarized)]
@@ -706,7 +706,7 @@ def run_one_day(inp):
         # define model and predict based on close set
         regr = RandomForestRegressor(
             n_estimators=256, max_depth=8
-        )  # tips on parameters: https://stats.stackexchange.com/questions/189344/choosing-random-forests-parameters
+        )  
         regr.fit(X_close[:-1, :], Y_standarized)
         pred = regr.predict(X_close[np.newaxis, -1, :])
         results["insample MAE close"] = [
@@ -727,7 +727,7 @@ def run_one_day(inp):
         # define model and predict for expert exogenous model with naive variable
         regr = RandomForestRegressor(
             n_estimators=256, max_depth=8
-        )  # tips on parameters: https://stats.stackexchange.com/questions/189344/choosing-random-forests-parameters
+        )  
         regr.fit(X_exog_fundamental_plus_price[:-1, :], Y_standarized)
         pred = regr.predict(X_exog_fundamental_plus_price[np.newaxis, -1, :])
         results["insample MAE exog"] = [

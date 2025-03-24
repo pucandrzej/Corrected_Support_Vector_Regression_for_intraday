@@ -247,16 +247,6 @@ def load_delivery_results(inp):
                             except:
                                 print(f"Skipped column {col}")
 
-                        # mae_results[horizon][trade_time]['avg_0_1_7'] = my_mae(np.array(actual), (np.array(fore_cols['prediction_0']) + np.array(fore_cols['prediction_1']) + np.array(fore_cols['prediction_7']) + np.array(naive))/4)
-                        # # add also the info about DM test p-value
-                        # p_value = dm_pval(actual, naive, (np.array(fore_cols['prediction_0']) + np.array(fore_cols['prediction_1']) + np.array(fore_cols['prediction_7']) + np.array(naive))/4)
-                        # mae_results[horizon][trade_time]['avg_0_1_7_DM_wrt_naive_pval'] = p_value
-
-                        # mae_results[horizon][trade_time]['avg_0_1_7_no_naive'] = my_mae(np.array(actual), (np.array(fore_cols['prediction_0']) + np.array(fore_cols['prediction_1']) + np.array(fore_cols['prediction_7']))/3)
-                        # # add also the info about DM test p-value
-                        # p_value = dm_pval(actual, naive, (np.array(fore_cols['prediction_0']) + np.array(fore_cols['prediction_1']) + np.array(fore_cols['prediction_7']))/3)
-                        # mae_results[horizon][trade_time]['avg_0_1_7_no_naive_DM_wrt_naive_pval'] = p_value
-
                         mae_results[horizon][trade_time]["avg_1_2_7_naive"] = my_mae(
                             np.array(actual),
                             (
@@ -293,16 +283,6 @@ def load_delivery_results(inp):
                         mae_results[horizon][trade_time][
                             "avg_1_2_7_naive_DM_wrt_naive_pval"
                         ] = p_value
-
-                        # mae_results[horizon][trade_time]['avg_0_1_6_7_no_naive'] = my_mae(np.array(actual), (np.array(fore_cols['prediction_0']) + np.array(fore_cols['prediction_1']) + np.array(fore_cols['prediction_6']) + np.array(fore_cols['prediction_7']))/4)
-                        # # add also the info about DM test p-value
-                        # p_value = dm_pval(actual, naive, (np.array(fore_cols['prediction_0']) + np.array(fore_cols['prediction_1']) + np.array(fore_cols['prediction_6']) + np.array(fore_cols['prediction_7']))/4)
-                        # mae_results[horizon][trade_time]['avg_0_1_6_7_no_naive_DM_wrt_naive_pval'] = p_value
-
-                        # mae_results[horizon][trade_time]['avg_1_2'] = my_mae(np.array(actual), (np.array(fore_cols['prediction_1']) + np.array(fore_cols['prediction_2']) + np.array(naive))/3)
-                        # # add also the info about DM test p-value
-                        # p_value = dm_pval(actual, naive, (np.array(fore_cols['prediction_1']) + np.array(fore_cols['prediction_2']) + np.array(naive))/3)
-                        # mae_results[horizon][trade_time]['avg_1_2_DM_wrt_naive_pval'] = p_value
 
             if mae_results[horizon][trade_time] == {}:
                 del mae_results[horizon][trade_time]

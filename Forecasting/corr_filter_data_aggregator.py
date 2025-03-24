@@ -1,4 +1,6 @@
 # aggregating the results of correlation based variables rejection in parallel (we have a lot of results files so reading them takes time, thus parallel solution)
+# this is an additional analysis file, create to check how many variables do we reject based on the correlation filter
+
 import pandas as pd
 import numpy as np
 import os
@@ -154,7 +156,7 @@ def load_delivery_results(inp):
             del corr_rejections[horizon]
     if corr_rejections != {}:
         pickle.dump(
-            corr_rejections, open(f"CORR_ANALYSIS/mae_results_{delivery}.pickle", "wb")
+            corr_rejections, open(f"CORR_ANALYSIS/corr_results_{delivery}.pickle", "wb")
         )
 
 
