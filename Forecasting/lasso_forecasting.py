@@ -14,7 +14,6 @@ except:
 from numba import njit
 from datetime import datetime, timedelta
 import argparse
-from plot_correlation import plot_correlation
 import matplotlib.pyplot as plt
 from tqdm import tqdm
 import time
@@ -113,9 +112,9 @@ preprocess_option = 0  # 0 - standardise, 1 - normalize to [0,1]
 alpha_KRR = 0.5
 
 # define the folder name to store the results - it will be created automatically
-results_folname = "LASSO_RECALC"
+results_folname = "INSAMPLE_TEST"
 # store also the correlation filter raports for each step in a separate directory
-corr_filter_results_folname = "LASSO_RECALC/CORR_REJECTION_ANALYSIS"
+corr_filter_results_folname = "INSAMPLE_TEST/CORR_REJECTION_ANALYSIS"
 
 # read the args from args parser
 args = parser.parse_args()
@@ -222,7 +221,7 @@ ge_fr = ge_fr[ge_fr.index >= datetime(year=2018, month=10, day=31)]
 ge_fr = ge_fr.interpolate()
 
 
-@nb_jit
+@nb_jit(nopython=True)
 def my_mae(X, Y):
     return np.mean(np.abs(X - Y))
 
@@ -905,17 +904,26 @@ def run_one_day(inp):
                 return np.exp(
                     width * calc_kernels[2] - 1 / (2 * sigma**2) * calc_kernels[-1]
                 )
-            elif kernel_option == "plain_laplace_L2":
+            elif kernel_option == "plain_laplace_L2_1":
                 width = np.log(2 - 2 * q_kernel) / np.quantile(kernels_train[0], q_data)
                 return np.exp(width * calc_kernels[0])
+            elif kernel_option == "plain_laplace_L2_2":
+                width = np.log(2 - 2 * q_kernel) / np.quantile(kernels_train[1], q_data)
+                return np.exp(width * calc_kernels[1])
+            elif kernel_option == "plain_laplace_L2_3":
+                width = np.log(2 - 2 * q_kernel) / np.quantile(kernels_train[2], q_data)
+                return np.exp(width * calc_kernels[2])
             elif kernel_option == "plain_laplace":
                 width = np.log(2 - 2 * q_kernel) / np.quantile(
                     plain_kernel_X_1_train_L1, q_data
                 )
                 return np.exp(width * calc_kernel_L1)
 
+        df_analysis = pd.DataFrame()
+        df_analysis['act'] = Y_standarized
+        df_analysis["naive"] = naive_vec_standardized[:-1]
         # to check whether it is positive semidefinite use: https://stackoverflow.com/questions/16266720/find-out-if-a-matrix-is-positive-definite-with-numpy
-        for kernel_choice in [1, 2, 7, "plain_laplace", "plain_laplace_L2"]:
+        for kernel_choice in [1,2,7,"plain_laplace_L2_1", "plain_laplace_L2_2", "plain_laplace_L2_3"]:
             training_matrix = fast_calculate_kernel_matrix(
                 stage="train", kernel_option=kernel_choice
             )
@@ -923,10 +931,11 @@ def run_one_day(inp):
                 estimator = KernelRidge(kernel="precomputed", alpha=alpha_KRR)
             elif kernel_model == "SVR":
                 estimator = SVR(kernel="precomputed", epsilon=svr_epsilon, C=C)
-            estimator.fit(training_matrix, Y_standarized[:, np.newaxis])
+            estimator.fit(training_matrix, Y_standarized)
             results[f"insample MAE_{kernel_choice}"] = [
                 my_mae(estimator.predict(training_matrix), Y_standarized)
             ]
+            df_analysis[kernel_choice] = estimator.predict(training_matrix)
             test_matrix = fast_calculate_kernel_matrix(
                 stage="test", kernel_option=kernel_choice
             )
@@ -943,6 +952,7 @@ def run_one_day(inp):
                     + np.min(Y[:-1])
                     + daily_data_window[-1, delivery_time, -(20 + forecasting_horizon)]
                 )  # prediction is the sum of forecasted signal and last known price (so we think of it as fine tuning the naive forecast)
+        df_analysis.to_csv(f"{np.abs(results[f'insample MAE_7'].to_numpy()[0] - results[f'insample MAE_plain_laplace_L2_3'].to_numpy()[0])}_{str(date_fore).replace(':', ';')}_insample_fit_test.csv")
 
     results["actual"] = [daily_data_window[-1, delivery_time, -1]]
     results["naive"] = [

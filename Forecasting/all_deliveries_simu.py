@@ -32,7 +32,7 @@ parser.add_argument("--kernel_solver", default="SVR", help="Model to use: KRR or
 args = parser.parse_args()
 
 # additional parameters
-processes = 30
+processes = 32
 
 for model in args.models:
     start = args.start_delivery
