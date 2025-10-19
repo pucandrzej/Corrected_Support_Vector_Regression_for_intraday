@@ -26,11 +26,12 @@ parser.add_argument(
     default=28,
     help="For every date consider a historical results from a calibration window.",
 )
+parser.add_argument('--special_results_directory', default=None, help='Running on WCSS Wroclaw University of Science and Technology supercomputers requires us to save the results in dedicated path.')
 parser.add_argument("--kernel_solver", default="SVR", help="Model to use: KRR or SVR")
 args = parser.parse_args()
 
 # additional parameters
-processes = 32
+processes = 48
 
 for model in args.models:
     start = args.start_delivery
@@ -65,6 +66,8 @@ for model in args.models:
                         str(args.calibration_window_len),
                         "--processes",
                         str(processes),
+                        "--special_results_directory",
+                        args.special_results_directory
                     ]
                 )
 
