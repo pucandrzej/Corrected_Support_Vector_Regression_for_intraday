@@ -684,9 +684,7 @@ def run_one_day(inp):
             )  # prediction is the sum of forecasted signal and last known price (so we think of it as fine tuning the naive forecast)
 
     elif model == "random_forest":
-        regr = RandomForestRegressor(
-            n_estimators=256, max_depth=8
-        )  
+        regr = RandomForestRegressor(n_estimators=256, max_depth=8)
         regr.fit(X[:-1, :], Y_standarized)
         pred = regr.predict(X[np.newaxis, -1, :])
         results["insample MAE"] = [my_mae(regr.predict(X[:-1, :]), Y_standarized)]
@@ -703,9 +701,7 @@ def run_one_day(inp):
                 + daily_data_window[-1, delivery_time, -(20 + forecasting_horizon)]
             )  # prediction is the sum of forecasted signal and last known price (so we think of it as fine tuning the naive forecast)
         # define model and predict based on close set
-        regr = RandomForestRegressor(
-            n_estimators=256, max_depth=8
-        )  
+        regr = RandomForestRegressor(n_estimators=256, max_depth=8)
         regr.fit(X_close[:-1, :], Y_standarized)
         pred = regr.predict(X_close[np.newaxis, -1, :])
         results["insample MAE close"] = [
@@ -724,9 +720,7 @@ def run_one_day(inp):
                 + daily_data_window[-1, delivery_time, -(20 + forecasting_horizon)]
             )  # prediction is the sum of forecasted signal and last known price (so we think of it as fine tuning the naive forecast)
         # define model and predict for expert exogenous model with naive variable
-        regr = RandomForestRegressor(
-            n_estimators=256, max_depth=8
-        )  
+        regr = RandomForestRegressor(n_estimators=256, max_depth=8)
         regr.fit(X_exog_fundamental_plus_price[:-1, :], Y_standarized)
         pred = regr.predict(X_exog_fundamental_plus_price[np.newaxis, -1, :])
         results["insample MAE exog"] = [
@@ -920,10 +914,17 @@ def run_one_day(inp):
                 return np.exp(width * calc_kernel_L1)
 
         df_analysis = pd.DataFrame()
-        df_analysis['act'] = Y_standarized
+        df_analysis["act"] = Y_standarized
         df_analysis["naive"] = naive_vec_standardized[:-1]
         # to check whether it is positive semidefinite use: https://stackoverflow.com/questions/16266720/find-out-if-a-matrix-is-positive-definite-with-numpy
-        for kernel_choice in [1,2,7,"plain_laplace_L2_1", "plain_laplace_L2_2", "plain_laplace_L2_3"]:
+        for kernel_choice in [
+            1,
+            2,
+            7,
+            "plain_laplace_L2_1",
+            "plain_laplace_L2_2",
+            "plain_laplace_L2_3",
+        ]:
             training_matrix = fast_calculate_kernel_matrix(
                 stage="train", kernel_option=kernel_choice
             )
@@ -952,7 +953,9 @@ def run_one_day(inp):
                     + np.min(Y[:-1])
                     + daily_data_window[-1, delivery_time, -(20 + forecasting_horizon)]
                 )  # prediction is the sum of forecasted signal and last known price (so we think of it as fine tuning the naive forecast)
-        df_analysis.to_csv(f"{np.abs(results[f'insample MAE_7'].to_numpy()[0] - results[f'insample MAE_plain_laplace_L2_3'].to_numpy()[0])}_{str(date_fore).replace(':', ';')}_insample_fit_test.csv")
+        df_analysis.to_csv(
+            f"{np.abs(results[f'insample MAE_7'].to_numpy()[0] - results[f'insample MAE_plain_laplace_L2_3'].to_numpy()[0])}_{str(date_fore).replace(':', ';')}_insample_fit_test.csv"
+        )
 
     results["actual"] = [daily_data_window[-1, delivery_time, -1]]
     results["naive"] = [

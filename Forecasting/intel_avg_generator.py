@@ -16,12 +16,10 @@ from datetime import timedelta
 import numpy as np
 from multiprocessing import Pool
 
-cols_sets_to_average = [
-    ["prediction_1", "prediction_2", "prediction_7", "naive"]
-]
+cols_sets_to_average = [["prediction_1", "prediction_2", "prediction_7", "naive"]]
 models = ["kernel_hr_naive_mult"]
 
-calibration_window_lens = [7, 14, 21, 28] # test of several calibration windows
+calibration_window_lens = [7, 14, 21, 28]  # test of several calibration windows
 dates = pd.date_range("2020-01-01", "2020-12-31")
 
 
