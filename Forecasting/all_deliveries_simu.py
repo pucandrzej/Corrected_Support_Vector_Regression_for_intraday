@@ -4,10 +4,8 @@ Script to run the simulation for the required configuration of distances before 
 
 import time
 import subprocess
-import gc
 
 import sys
-import os
 
 import argparse
 
@@ -51,7 +49,7 @@ for model in args.models:
             for variable_set in [11]:
                 joblist.append(
                     [
-                        "C:/Users/riczi/Studies/Continuous_market_analysis/contmarket311/Scripts/python.exe",
+                        "python",
                         "lasso_forecasting.py",
                         "--model",
                         model,

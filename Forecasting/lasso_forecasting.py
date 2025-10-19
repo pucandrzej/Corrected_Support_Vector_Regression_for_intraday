@@ -63,6 +63,8 @@ parser.add_argument("--kernel_solver", default="SVR", help="Model to use: KRR or
 
 parser.add_argument("--processes", default=1, help="No of processes")
 
+parser.add_argument('--special_results_directory', default=None, help='Running on WCSS Wroclaw University of Science and Technology supercomputers requires us to save the results in dedicated path.')
+
 # hyperparameters of the models
 svr_epsilon = 0.1
 C = 1.0
@@ -83,6 +85,8 @@ results_folname = "TEST_NEW_INPUT_DATA"
 
 # read the args from args parser
 args = parser.parse_args()
+if args.special_results_directory is not None:
+    results_folname = os.path.join(args.special_results_directory, results_folname)
 forecasting_horizons = args.forecasting_horizons
 kernel_model = args.kernel_solver
 model = args.model
@@ -799,9 +803,6 @@ def run_one_day(inp):
                 )
                 return np.exp(width * calc_kernel_L1)
 
-        df_analysis = pd.DataFrame()
-        df_analysis["act"] = Y_standarized
-        df_analysis["naive"] = naive_vec_standardized[:-1]
         # to check whether it is positive semidefinite use: https://stackoverflow.com/questions/16266720/find-out-if-a-matrix-is-positive-definite-with-numpy
         for kernel_choice in [
             1,
@@ -822,7 +823,6 @@ def run_one_day(inp):
             results[f"insample MAE_{kernel_choice}"] = [
                 my_mae(estimator.predict(training_matrix), Y_standarized)
             ]
-            df_analysis[kernel_choice] = estimator.predict(training_matrix)
             test_matrix = fast_calculate_kernel_matrix(
                 stage="test", kernel_option=kernel_choice
             )
@@ -839,9 +839,6 @@ def run_one_day(inp):
                     + np.min(Y[:-1])
                     + daily_data_window[-1, delivery_time, -(20 + forecasting_horizon)]
                 )  # prediction is the sum of forecasted signal and last known price (so we think of it as fine tuning the naive forecast)
-        df_analysis.to_csv(
-            f"{np.abs(results['insample MAE_7'].to_numpy()[0] - results['insample MAE_plain_laplace_L2_3'].to_numpy()[0])}_{str(date_fore).replace(':', ';')}_insample_fit_test.csv"
-        )
 
     results["actual"] = [daily_data_window[-1, delivery_time, -1]]
     results["naive"] = [
