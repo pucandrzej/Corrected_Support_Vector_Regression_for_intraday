@@ -1,4 +1,4 @@
-# ignore folder with data that is not publish
+# ignore directories with data that is not public
 Data/Day-Ahead_Auction
 Data/ID_auction_preprocessed 
 Data/Indices
@@ -11,5 +11,4 @@ Data/preprocessed_dataset.csv
 contmarket311
 # ignore the forecasting results and intraday data
 Forecasting/RESULTS
-SLIDE_SHOW_IMAGES
 Forecasting/data_ID.db

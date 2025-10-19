@@ -22,6 +22,7 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
+results_dir = os.path.join("RESULTS", "cSVR_SVR_LASSO_RF_MAE_ANALYSIS") # directory to save the results of MAE/QAPE analysis
 
 def mae_qape(Y, X, naive, measure_type="avg"):
     """MAE if measure_type is avg,"""
@@ -50,7 +51,7 @@ def prepare_mae_per_delivery(inp):
     """Loading the results and calculating MAE/QAPE for certain delivery and for each lead time and forecasting horizon.
     The resulting MAE is saved in pickle files.
     """
-    delivery, horizons, results_dir = inp
+    delivery, horizons, forecasts_dir = inp
     extreme_quantile = float(args.extreme_surprise_quantile)
     for measure_type in ["avg", "quantile_0.5", "quantile_0.25", "quantile_0.75"]:
         for trade_vs_delivery_delta in [30, 60, 90, 120, 150, 180]:
@@ -64,16 +65,16 @@ def prepare_mae_per_delivery(inp):
                 random_forest_dir = f"random_forest_2020-01-01_2020-12-31_427_{delivery}_[{horizon}]_{trade_time}_True"
                 lasso_dir = f"lasso_2020-01-01_2020-12-31_427_{delivery}_[{horizon}]_{trade_time}_True"
 
-                if os.path.exists(os.path.join(results_dir, fore_dir)):
+                if os.path.exists(os.path.join(forecasts_dir, fore_dir)):
                     forecasts = [
                         f
-                        for f in os.listdir(os.path.join(results_dir, fore_dir))
+                        for f in os.listdir(os.path.join(forecasts_dir, fore_dir))
                         if ".csv" in f and "test_" in f
                     ]
 
                     if len(forecasts):
                         df_sample = pd.read_csv(
-                            os.path.join(results_dir, fore_dir, forecasts[0])
+                            os.path.join(forecasts_dir, fore_dir, forecasts[0])
                         )
 
                         actual = []
@@ -85,29 +86,32 @@ def prepare_mae_per_delivery(inp):
                                     fore.split("_")[1].split(" ")[0], "%Y-%m-%d"
                                 )
                             )
-                            df = pd.read_csv(os.path.join(results_dir, fore_dir, fore))
+                            df = pd.read_csv(os.path.join(forecasts_dir, fore_dir, fore))
                             try:
                                 actual.append(df.loc[0, "actual"])
                                 naive.append(df.loc[0, "naive"])
                             except Exception as err:
                                 raise ValueError(
-                                    f"Failed to load the results file {os.path.join(results_dir, fore_dir, fore)}. Exception: {err}"
+                                    f"Failed to load the results file {os.path.join(forecasts_dir, fore_dir, fore)}. Exception: {err}"
                                 )
                         actual = np.array(actual)
                         naive = np.array(naive)
                         all_dates = np.array(all_dates)
 
-                        # get only the extreme quantiles of price
-                        if args.errors_choice == "standard":
+                        if args.errors_choice == "standard": # consider all of the prices
                             extreme_indices = range(len(actual))
-                        else:
-                            relative_surprise = np.abs((actual - naive) / naive)
+                        else: # get only the extreme quantiles of price
+                            relative_surprise = np.full_like(actual, np.nan, dtype=float)
+                            valid = naive != 0 # we cannot calculate the relative surprise for naive = 0
+                            relative_surprise[valid] = np.abs((actual[valid] - naive[valid]) / naive[valid])
+                            relative_surprise[~valid] = np.nan
+
                             if extreme_quantile > 0.5:
-                                extreme_indices = relative_surprise > np.quantile(
+                                extreme_indices = relative_surprise > np.nanquantile( # will set False in place of comparison with NaN
                                     relative_surprise, extreme_quantile
                                 )
                             else:
-                                extreme_indices = relative_surprise < np.quantile(
+                                extreme_indices = relative_surprise < np.nanquantile( # will set False in place of comparison with NaN
                                     relative_surprise, extreme_quantile
                                 )
 
@@ -125,9 +129,9 @@ def prepare_mae_per_delivery(inp):
                                 for fore in forecasts:
                                     df_random_forest = pd.read_csv(
                                         os.path.join(
-                                            results_dir,
+                                            forecasts_dir,
                                             random_forest_dir,
-                                            fore.replace("_weights", "_11_weights"),
+                                            fore,
                                         )
                                     )
                                     col_results.append(df_random_forest.loc[0, col])
@@ -155,9 +159,9 @@ def prepare_mae_per_delivery(inp):
                                 for fore in forecasts:
                                     df_lasso = pd.read_csv(
                                         os.path.join(
-                                            results_dir,
+                                            forecasts_dir,
                                             lasso_dir,
-                                            fore.replace("_weights", "_11_weights"),
+                                            fore,
                                         )
                                     )
                                     col_results.append(df_lasso.loc[0, col])
@@ -189,7 +193,7 @@ def prepare_mae_per_delivery(inp):
                                         for fore in forecasts:
                                             df = pd.read_csv(
                                                 os.path.join(
-                                                    results_dir, fore_dir, fore
+                                                    forecasts_dir, fore_dir, fore
                                                 )
                                             )
                                             col_results.append(df.loc[0, col])
@@ -230,7 +234,7 @@ def prepare_mae_per_delivery(inp):
                     pickle.dump(
                         mae_results,
                         open(
-                            f"RESULTS/MAE_ANALYSIS/{args.extreme_surprise_quantile}_relative_surprise_{measure_type}_mae_results_{trade_vs_delivery_delta}_{delivery}.pickle",
+                            os.path.join(results_dir, f"{args.extreme_surprise_quantile}_relative_surprise_{measure_type}_mae_results_{trade_vs_delivery_delta}_{delivery}.pickle"),
                             "wb",
                         ),
                     )
@@ -238,19 +242,19 @@ def prepare_mae_per_delivery(inp):
                     pickle.dump(
                         mae_results,
                         open(
-                            f"RESULTS/MAE_ANALYSIS/{measure_type}_mae_results_{trade_vs_delivery_delta}_{delivery}.pickle",
+                            os.path.join(results_dir, f"{measure_type}_mae_results_{trade_vs_delivery_delta}_{delivery}.pickle"),
                             "wb",
                         ),
                     )
 
 
 if __name__ == "__main__":
-    results_dir = "RESULTS/cSVR_SVR_LASSO_RF_FORECASTS"
-    results_dirs = os.listdir(results_dir)
+    forecasts_dir = os.path.join("RESULTS", "cSVR_SVR_LASSO_RF_FORECASTS") # source directory for forecasting results
+    results_dirs = os.listdir(forecasts_dir)
 
     deliveries = np.arange(96)
     horizons = [30, 60, 90, 120, 150, 180, 210, 300, 390, 480]
 
     with Pool(processes=32) as p:
-        inputlist = [(i, horizons, results_dir) for i in deliveries]
+        inputlist = [(i, horizons, forecasts_dir) for i in deliveries]
         _ = p.map(prepare_mae_per_delivery, inputlist)

@@ -7,7 +7,7 @@ calculate the MAE of each model in the calibration window
 import os
 
 try:
-    os.chdir("Forecasting")  # for debuger run
+    os.chdir("Forecasting")  # for debugger run
 except:
     pass
 
@@ -16,11 +16,12 @@ from datetime import timedelta
 import numpy as np
 from multiprocessing import Pool
 
+results_dir = "RESULTS/cSVR_SVR_LASSO_RF_FORECASTS"
 cols_sets_to_average = [["prediction_1", "prediction_2", "prediction_7", "naive"]]
-models = ["kernel_hr_naive_mult"]
+models = ["kernel_hr_naive_mult", "lasso", "random_forest"]
 
-calibration_window_lens = [7, 14, 21, 28]  # test of several calibration windows
-dates = pd.date_range("2020-01-01", "2020-12-31")
+calibration_window_lens = [7, 14, 21, 28]  # test of several calibration windows for the intel. avg
+dates = pd.date_range("2020-01-01", "2020-12-31") # test window dates
 
 
 def my_mae(X, Y):
@@ -31,9 +32,9 @@ def load_delivery_results(inp):
     delivery, horizons = inp
     print(f"Processing: {delivery}")
     for model in models:
-        for trade_vs_delivery_delta in [180]:
+        for trade_vs_delivery_delta in [30, 60, 90, 120, 150, 180]:
             for forecasting_horizon in horizons:
-                col_idx = 20
+                col_idx = 20 # LEGACY col index
                 for cols_to_average in cols_sets_to_average:
                     if (
                         model != "kernel_hr_naive_mult"
@@ -44,12 +45,7 @@ def load_delivery_results(inp):
                             "prediction_exog",
                             "naive",
                         ]
-                    if model == "lasso":
-                        results_folname = "C:/Users/riczi/Studies/Continuous_market_analysis/Forecasting/LASSO_results"
-                    elif model == "random_forest":
-                        results_folname = "C:/Users/riczi/Studies/Continuous_market_analysis/Forecasting/DEVEL_RESULTS_RF"
-                    elif model == "kernel_hr_naive_mult":
-                        results_folname = "C:/Users/riczi/Studies/Continuous_market_analysis/Forecasting/DEVEL_RESULTS_l"
+
                     for calibration_window_len in calibration_window_lens:
                         trade_time = delivery * 15 + 8 * 60 - trade_vs_delivery_delta
                         calib_weights_mul = {}
@@ -69,10 +65,11 @@ def load_delivery_results(inp):
 
                                     forecast_frames.append(
                                         pd.read_csv(
-                                            f"{results_folname}/{model}_2020-01-01_2020-12-31_427_{delivery}_[{forecasting_horizon}]_{trade_time}_True/{calibration_flag}_{str((pd.to_datetime(calib_date) - timedelta(days=1)).replace(hour=16) + timedelta(minutes=int(trade_time))).replace(':', ';')}_{forecasting_horizon}_11_weights_1.0_window_expanding.csv"
+                                            os.path.join(results_dir, f"{model}_2020-01-01_2020-12-31_427_{delivery}_[{forecasting_horizon}]_{trade_time}_True", f"{calibration_flag}_{str((pd.to_datetime(calib_date) - timedelta(days=1)).replace(hour=16) + timedelta(minutes=int(trade_time))).replace(':', ';')}_{forecasting_horizon}_11_weights_1.0_window_expanding.csv"),
                                         )
                                     )
 
+                                # calculate the MAE errors from the calibration window
                                 errors = []
                                 for col_to_avg in cols_to_average:
                                     forecast = []
@@ -84,7 +81,7 @@ def load_delivery_results(inp):
                                         my_mae(np.array(forecast), np.array(actual))
                                     )
 
-                                # multiplicative weights
+                                # derive the multiplicative weights based on the forecast errors
                                 weights = []
                                 for i in range(len(errors)):
                                     weights.append(
@@ -93,17 +90,17 @@ def load_delivery_results(inp):
 
                                 calib_weights_mul[test_date] = weights
 
-                            # create the average forecasts based on the weights
+                            # for every forecast in test window create the average forecasts based on the weights
                             for _, date in enumerate(dates):
                                 forecast = pd.read_csv(
-                                    f"{results_folname}/{model}_2020-01-01_2020-12-31_427_{delivery}_[{forecasting_horizon}]_{trade_time}_True/test_{str((pd.to_datetime(date) - timedelta(days=1)).replace(hour=16) + timedelta(minutes=int(trade_time))).replace(':', ';')}_{forecasting_horizon}_11_weights_1.0_window_expanding.csv",
+                                    os.path.join(results_dir, f"{model}_2020-01-01_2020-12-31_427_{delivery}_[{forecasting_horizon}]_{trade_time}_True", f"test_{str((pd.to_datetime(date) - timedelta(days=1)).replace(hour=16) + timedelta(minutes=int(trade_time))).replace(':', ';')}_{forecasting_horizon}_11_weights_1.0_window_expanding.csv"),
                                     index_col=0,
                                 )
 
                                 avg_result = forecast.copy()
 
                                 weights = calib_weights_mul[date]
-                                avg_result[f"prediction_{12 + col_idx}"] = [
+                                avg_result[f"prediction_{12 + col_idx}"] = [ # LEGACY index shift by 12
                                     np.sum(
                                         avg_result[cols_to_average].to_numpy()[0]
                                         * np.array(weights)
@@ -111,12 +108,12 @@ def load_delivery_results(inp):
                                 ]
 
                                 avg_result.to_csv(
-                                    f"{results_folname}/{model}_2020-01-01_2020-12-31_427_{delivery}_[{forecasting_horizon}]_{trade_time}_True/test_{str((pd.to_datetime(date) - timedelta(days=1)).replace(hour=16) + timedelta(minutes=int(trade_time))).replace(':', ';')}_{forecasting_horizon}_11_weights_1.0_window_expanding.csv"
+                                    os.path.join(results_dir, f"{model}_2020-01-01_2020-12-31_427_{delivery}_[{forecasting_horizon}]_{trade_time}_True", f"test_{str((pd.to_datetime(date) - timedelta(days=1)).replace(hour=16) + timedelta(minutes=int(trade_time))).replace(':', ';')}_{forecasting_horizon}_11_weights_1.0_window_expanding.csv"),
                                 )
 
                             col_idx += 1
                         except Exception as err:
-                            print(f"Failed due to {err}")
+                            print(f"Failed to process for calibration window {calibration_window_len} due to {err}.")
 
 
 if __name__ == "__main__":
