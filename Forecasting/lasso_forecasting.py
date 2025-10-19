@@ -14,25 +14,19 @@ except:
 from numba import njit
 from datetime import datetime, timedelta
 import argparse
-import matplotlib.pyplot as plt
-from tqdm import tqdm
 import time
 from multiprocessing import Pool, RawArray
 import scipy
 from sklearn.feature_selection import VarianceThreshold
-from sklearn.linear_model import LassoLarsCV, LassoLars
+from sklearn.linear_model import LassoLarsCV
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.kernel_ridge import KernelRidge
-from sklearn.pipeline import Pipeline
 from sklearn.svm import SVR
 import sqlite3
-import tensorflow as tf
 from sklearn.ensemble import RandomForestRegressor
-
-from jax.example_libraries import optimizers
-from jax import jit, grad, vmap
-
 from numba import jit as nb_jit
+
+# import custom functions
 from remove_zerovar import remove_zerovar
 
 parser = argparse.ArgumentParser()
@@ -59,62 +53,33 @@ parser.add_argument(
     default=32 * 15 + 8 * 60 - 60,
     help="Minute before the delivery that we want to trade in",
 )
-parser.add_argument(
-    "--remove_zero_var", default=True, help="Remove the zero variance variables"
-)
-parser.add_argument("--weighting_alpha", default=1, help="Weighting coef")
 parser.add_argument("--variable_set", default=11, help="Variable set choice")
-parser.add_argument(
-    "--rolling_window",
-    default=False,
-    action="store_true",
-    help="Use rolling window instead of the expanding window.",
-)
-parser.add_argument(
-    "--window_len", default=180, help="Training window length for rolling window."
-)
 parser.add_argument(
     "--calibration_window_len",
     default=28,
     help="For every date consider a historical results from a calibration window.",
 )
 parser.add_argument("--kernel_solver", default="SVR", help="Model to use: KRR or SVR")
-parser.add_argument(
-    "--consider_exog",
-    default=True,
-    action="store_true",
-    help="Consider the exog. variables",
-)
-parser.add_argument(
-    "--save_corr_rejected_variables",
-    default=False,
-    action="store_true",
-    help="Save the indices of variables rejected in course of correlation filtering",
-)
-parser.add_argument(
-    "--no_filter_exog",
-    default=True,
-    action="store_true",
-    help="Apply the correlation based filtering to exog. variables.",
-)
+
 parser.add_argument("--processes", default=1, help="No of processes")
-parser.add_argument(
-    "--limit_lasso_variables_no",
-    default=False,
-    action="store_true",
-    help="No of processes",
-)
 
 # hyperparameters of the models
 svr_epsilon = 0.1
 C = 1.0
 preprocess_option = 0  # 0 - standardise, 1 - normalize to [0,1]
 alpha_KRR = 0.5
+lasso_cv_window_days = 14
+q_kernel = 0.75
+q_kernel_naive = 0.75
+q_data = 0.5
+q_data_naive = 0.75
+remove_zero_var = True
+# Below are the legacy arguments to keep the results files naming convention
+window_len = 'expanding'
+weighting_alpha = 1
 
 # define the folder name to store the results - it will be created automatically
-results_folname = "INSAMPLE_TEST"
-# store also the correlation filter raports for each step in a separate directory
-corr_filter_results_folname = "INSAMPLE_TEST/CORR_REJECTION_ANALYSIS"
+results_folname = "TEST_NEW_INPUT_DATA"
 
 # read the args from args parser
 args = parser.parse_args()
@@ -124,18 +89,15 @@ model = args.model
 start = args.daterange_start
 end = args.daterange_end
 lookback = int(args.lookback)
-weighting_alpha = float(args.weighting_alpha)
 variable_set = int(args.variable_set)
 trade_time = int(args.trade_time)
 delivery_time = int(args.delivery_time)
-remove_zero_var = args.remove_zero_var
-window_len = int(args.window_len)
-if not args.rolling_window:  # if not rolling window the window is expanding
-    window_len = "expanding"
 calibration_window_len = int(args.calibration_window_len)
 
+# prepare the structure to save the simulation results
 if not os.path.exists(os.path.join(results_folname)):
     os.mkdir(os.path.join(results_folname))
+
 for forecasting_horizon in forecasting_horizons:
     if not os.path.exists(
         os.path.join(
@@ -150,43 +112,25 @@ for forecasting_horizon in forecasting_horizons:
             )
         )
 
-if not os.path.exists(os.path.join(corr_filter_results_folname)):
-    os.mkdir(os.path.join(corr_filter_results_folname))
-for forecasting_horizon in forecasting_horizons:
-    if not os.path.exists(
-        os.path.join(
-            corr_filter_results_folname,
-            f"{start}_{end}_{lookback}_{delivery_time}_{[forecasting_horizon]}_{trade_time}_{remove_zero_var}",
-        )
-    ):
-        os.mkdir(
-            os.path.join(
-                corr_filter_results_folname,
-                f"{start}_{end}_{lookback}_{delivery_time}_{[forecasting_horizon]}_{trade_time}_{remove_zero_var}",
-            )
-        )
-
+# test window dates
 dates = pd.date_range(start, end)
+# calibration window dates
 dates_calibration = pd.date_range(
     pd.to_datetime(start) - timedelta(days=calibration_window_len),
     pd.to_datetime(start) - timedelta(days=1),
 )
 
-# load the exogenous variables:
+##################################################################
+# Load the exogenous variables:
+##################################################################
 
 # DA quarterhourly prices
 DA_qtrly = pd.read_csv(
     "../Data/Day-Ahead-Quarterly-Data/DA_prices_qtrly_2018_2020_preprocessed.csv",
-    parse_dates=["Datetime from"],
-    na_values=["n/e"],
-    index_col=["Datetime from"],
+    index_col=0,
 )
-DA_qtrly.index = pd.to_datetime(DA_qtrly.index, dayfirst=True)
-DA_qtrly = DA_qtrly["Day-ahead Price [EUR/MWh]"].to_frame(
-    name="Day-ahead Price [EUR/MWh]"
-)
+DA_qtrly.index = pd.to_datetime(DA_qtrly.index)
 DA_qtrly = DA_qtrly[DA_qtrly.index >= datetime(year=2018, month=10, day=31)]
-DA_qtrly = DA_qtrly.interpolate()
 
 # ID quarterhourly prices
 ID_qtrly = pd.read_csv(
@@ -202,13 +146,11 @@ Load = pd.read_csv(
 )
 Load.index = pd.to_datetime(Load.index)
 Load = Load[Load.index >= datetime(year=2018, month=10, day=31)]
-Load = Load.interpolate()
 
 # res generation
 gen = pd.read_csv("../Data/Generation/Generation_2018-2020.csv", index_col=0)
 gen.index = pd.to_datetime(gen.index)
 gen = gen[gen.index >= datetime(year=2018, month=10, day=31)]
-gen = gen.interpolate()
 
 # cross border trade with FR
 ge_fr = pd.read_csv(
@@ -218,46 +160,34 @@ ge_fr = pd.read_csv(
 )
 ge_fr.index = pd.to_datetime(ge_fr.index)
 ge_fr = ge_fr[ge_fr.index >= datetime(year=2018, month=10, day=31)]
-ge_fr = ge_fr.interpolate()
-
 
 @nb_jit(nopython=True)
 def my_mae(X, Y):
     return np.mean(np.abs(X - Y))
 
-
 # A global dictionary storing the variables passed from the initializer - we use it to pass the same data between workers
 var_dict = {}
 
-
 def init_worker(Model_data, Model_data_shape):
+    '''Used as a supplementary function to send big numpy array between workers.'''
     var_dict["Model_data"] = Model_data
     var_dict["Model_data_shape"] = Model_data_shape
 
-
 def run_one_day(inp):
-    import keras  # must be imported inside in case of windows - otherwise is not found
-
+    '''Runs the main simulation for certain model, delivery and day. Saves resulting forecasts in a csv file.'''
     idx = inp[0]
     date_fore = inp[1]
     forecasting_horizon = inp[2]
     variables_set = inp[3]
     model = inp[4]
     calibration_flag = inp[5]
-    if not args.rolling_window:
-        daily_data_window = np.swapaxes(
-            np.frombuffer(var_dict["Model_data"]).reshape(var_dict["Model_data_shape"]),
-            1,
-            2,
-        )[:idx, :, :]  # swapaxes needed after migration from np array to database
-    else:
-        daily_data_window = np.swapaxes(
-            np.frombuffer(var_dict["Model_data"]).reshape(var_dict["Model_data_shape"]),
-            1,
-            2,
-        )[
-            idx - window_len : idx, :, :
-        ]  # swapaxes needed after migration from np array to database, -8 is for 7 week days and for python indexing
+
+    daily_data_window = np.swapaxes(
+        np.frombuffer(var_dict["Model_data"]).reshape(var_dict["Model_data_shape"]),
+        1,
+        2,
+    )[:idx, :, :]  # swapaxes needed after migration from np array to database
+
     # difference the data, assume 20min is the data avail. delay (source: market description)
     X = (
         daily_data_window[
@@ -293,7 +223,7 @@ def run_one_day(inp):
             :, np.max([delivery_time - 4, 0]) : np.min([delivery_time + 1, 96]), -60:
         ]
 
-    # You can define Your variables set here
+    # you can define your variables set here
     if variables_set == 10:
         X = X[
             :,
@@ -306,9 +236,6 @@ def run_one_day(inp):
             np.max([delivery_time - 8, 0]) : np.min([delivery_time + 5, 96]),
             np.append(np.arange(0, np.shape(X)[-1] - 1, 15), np.shape(X)[-1] - 1),
         ]
-
-    initial_shape_X = np.shape(X)
-    initial_shape_X_close = np.shape(X_close)
 
     # exclude the variables that have 0 variance in the forecasted day
     X, removed_zerovar_foreday_X = remove_zerovar(X)
@@ -350,169 +277,170 @@ def run_one_day(inp):
     elif preprocess_option == 1:
         scaler = MinMaxScaler()
 
-    if args.consider_exog:
-        # add the last known aggregated volume information
-        X = np.hstack((X, X_exog[-len(X) :, :, -1]))
-        # add load and gen forecasts
-        Load_fore = Load[
-            (Load.index.hour == int(delivery_time * 0.25))
-            & (
-                Load.index.minute
-                == int((delivery_time * 0.25 - int(delivery_time * 0.25)) * 4 * 15)
-            )
-        ][1 : 1 + idx]["Forecast"]
-        X = np.hstack((X, np.expand_dims(Load_fore[-len(X) :], 1)))
-        Gen_fore = (
-            gen[
-                (gen.index.hour == int(delivery_time * 0.25))
-                & (
-                    gen.index.minute
-                    == int((delivery_time * 0.25 - int(delivery_time * 0.25)) * 4 * 15)
-                )
-            ][1 : 1 + idx]["SPV DA"]
-            + gen[
-                (gen.index.hour == int(delivery_time * 0.25))
-                & (
-                    gen.index.minute
-                    == int((delivery_time * 0.25 - int(delivery_time * 0.25)) * 4 * 15)
-                )
-            ][1 : 1 + idx]["W DA"]
+    # add the last known aggregated volume information
+    X = np.hstack((X, X_exog[-len(X) :, :, -1]))
+    # add load and gen forecasts
+    Load_fore = Load[
+        (Load.index.hour == int(delivery_time * 0.25))
+        & (
+            Load.index.minute
+            == int((delivery_time * 0.25 - int(delivery_time * 0.25)) * 4 * 15)
         )
-        X = np.hstack((X, np.expand_dims(Gen_fore[-len(X) :], 1)))
-
-        # add an actual DA price for the delivery time
-        DA_price = DA_qtrly[
-            (DA_qtrly.index.hour == int(delivery_time * 0.25))
+    ][1 : 1 + idx]["Forecast"]
+    X = np.hstack((X, np.expand_dims(Load_fore[-len(X) :], 1)))
+    Gen_fore = (
+        gen[
+            (gen.index.hour == int(delivery_time * 0.25))
             & (
-                DA_qtrly.index.minute
+                gen.index.minute
                 == int((delivery_time * 0.25 - int(delivery_time * 0.25)) * 4 * 15)
             )
-        ][1 : 1 + idx]["Day-ahead Price [EUR/MWh]"]
-        X = np.hstack((X, np.expand_dims(DA_price[-len(X) :], 1)))
-
-        # add an actual ID price for the delivery time
-        DA_price = ID_qtrly[
-            (ID_qtrly.index.hour == int(delivery_time * 0.25))
+        ][1 : 1 + idx]["SPV DA"]
+        + gen[
+            (gen.index.hour == int(delivery_time * 0.25))
             & (
-                ID_qtrly.index.minute
+                gen.index.minute
                 == int((delivery_time * 0.25 - int(delivery_time * 0.25)) * 4 * 15)
             )
-        ][1 : 1 + idx]["price"]
-        X = np.hstack((X, np.expand_dims(DA_price[-len(X) :], 1)))
+        ][1 : 1 + idx]["W DA"]
+    )
+    X = np.hstack((X, np.expand_dims(Gen_fore[-len(X) :], 1)))
 
-        # add the last known actual load, load forecast error, actual gen and gen forecast error and actual DE-FR exchange
-        exog_avail_mins = (
-            trade_time - forecasting_horizon
-        )  # 61mins to account for data avail
-        for exog_idx, exog_df in enumerate([Load, gen, ge_fr]):
-            if exog_idx != 2:
-                shift = 61
-            else:
-                shift = 121
-            datetime_avail = (pd.to_datetime(date_fore) - timedelta(days=1)).replace(
-                hour=16
-            ) + timedelta(minutes=exog_avail_mins - shift)
-            if datetime_avail.date() < date_fore.date():  # we are shifted by one day
-                exog_df = exog_df[exog_df.index <= pd.to_datetime(date_fore.date())]
-            else:
-                exog_df = exog_df[
-                    exog_df.index
-                    <= pd.to_datetime(date_fore.date() + timedelta(days=1))
+    # add an actual DA price for the delivery time
+    DA_price = DA_qtrly[
+        (DA_qtrly.index.hour == int(delivery_time * 0.25))
+        & (
+            DA_qtrly.index.minute
+            == int((delivery_time * 0.25 - int(delivery_time * 0.25)) * 4 * 15)
+        )
+    ][1 : 1 + idx]["Price"]
+    X = np.hstack((X, np.expand_dims(DA_price[-len(X) :], 1)))
+
+    # add an actual ID price for the delivery time
+    DA_price = ID_qtrly[
+        (ID_qtrly.index.hour == int(delivery_time * 0.25))
+        & (
+            ID_qtrly.index.minute
+            == int((delivery_time * 0.25 - int(delivery_time * 0.25)) * 4 * 15)
+        )
+    ][1 : 1 + idx]["price"]
+    X = np.hstack((X, np.expand_dims(DA_price[-len(X) :], 1)))
+
+    # add the last known actual load, load forecast error, actual gen and gen forecast error and actual DE-FR exchange
+    exog_avail_mins = (
+        trade_time - forecasting_horizon
+    )  # 61mins to account for data avail
+
+    for exog_idx, exog_df in enumerate([Load, gen, ge_fr]):
+        if exog_idx != 2:
+            shift = 61
+        else:
+            shift = 121
+        datetime_avail = (pd.to_datetime(date_fore) - timedelta(days=1)).replace(
+            hour=16
+        ) + timedelta(minutes=exog_avail_mins - shift)
+        if datetime_avail.date() < date_fore.date():  # we are shifted by one day
+            exog_df = exog_df[exog_df.index <= pd.to_datetime(date_fore.date())]
+        else:
+            exog_df = exog_df[
+                exog_df.index
+                <= pd.to_datetime(date_fore.date() + timedelta(days=1))
+            ]
+
+        if exog_idx != 2:
+            exog_last_info = exog_df[
+                (exog_df.index.hour == datetime_avail.hour)
+                & (exog_df.index.minute == datetime_avail.minute // 15 * 15)
+            ]
+        else:
+            exog_last_info = exog_df[exog_df.index.hour == datetime_avail.hour]
+
+        if exog_idx == 0:
+            X = np.hstack(
+                (X, np.expand_dims(exog_last_info["Actual"][-len(X) :], 1))
+            )
+            exog_last_info_err = (
+                exog_last_info["Actual"] - exog_last_info["Forecast"]
+            )
+            X = np.hstack((X, np.expand_dims(exog_last_info_err[-len(X) :], 1)))
+        elif exog_idx == 1:
+            X = np.hstack(
+                (
+                    X,
+                    np.expand_dims(
+                        exog_last_info["SPV"][-len(X) :]
+                        + exog_last_info["W"][-len(X) :],
+                        1,
+                    ),
+                )
+            )
+            exog_last_info_err = (
+                exog_last_info["SPV"]
+                + exog_last_info["W"]
+                - exog_last_info["SPV DA"]
+                - exog_last_info["W DA"]
+            )
+            X = np.hstack((X, np.expand_dims(exog_last_info_err[-len(X) :], 1)))
+        elif exog_idx == 2:
+            X = np.hstack(
+                (
+                    X,
+                    np.expand_dims(
+                        exog_last_info[exog_last_info.columns[0]][-len(X) :], 1
+                    ),
+                )
+            )
+    # add the sum of volume traded for forecasted delivery in the last 60 minutes
+    X = np.hstack(
+        (X, np.expand_dims(np.sum(volume_unaggr_undiff[-len(X) :, -60:], 1), 1))
+    )
+    # add the number of minutes with trades in them in the last 60 minutes
+    X = np.hstack(
+        (X, np.expand_dims(np.sum(volume_unaggr_undiff[-len(X) :, -60:] > 0, 1), 1))
+    )
+    # prepare a set of exog for kernel regression
+    X_exog_fundamental = X[:, -12:]
+    X_exog_fundamental = np.hstack(
+        (X_exog_fundamental, dummies_col[-len(X_exog_fundamental) :, np.newaxis])
+    )  # add the nonlinear dummies column
+
+    X_exog_fundamental_plus_price = X_exog_fundamental.copy()
+    X_exog_fundamental_plus_price = np.hstack(
+        (
+            X_exog_fundamental_plus_price,
+            np.expand_dims(
+                daily_data_window[
+                    -len(X_exog_fundamental_plus_price) :,
+                    delivery_time,
+                    -(20 + forecasting_horizon),
+                ],
+                1,
+            ),
+        )
+    )
+    X_exog_fundamental_plus_price = np.hstack(
+        (
+            X_exog_fundamental_plus_price,
+            np.expand_dims(
+                daily_data_window[
+                    -len(X_exog_fundamental_plus_price) :,
+                    delivery_time,
+                    -(20 + forecasting_horizon),
                 ]
+                - daily_data_window[
+                    -len(X_exog_fundamental_plus_price) :,
+                    delivery_time,
+                    -2 * (20 + forecasting_horizon),
+                ],
+                1,
+            ),
+        )
+    )
 
-            if exog_idx != 2:
-                exog_last_info = exog_df[
-                    (exog_df.index.hour == datetime_avail.hour)
-                    & (exog_df.index.minute == datetime_avail.minute // 15 * 15)
-                ]
-            else:
-                exog_last_info = exog_df[exog_df.index.hour == datetime_avail.hour]
-            if exog_idx == 0:
-                X = np.hstack(
-                    (X, np.expand_dims(exog_last_info["Actual"][-len(X) :], 1))
-                )
-                exog_last_info_err = (
-                    exog_last_info["Actual"] - exog_last_info["Forecast"]
-                )
-                X = np.hstack((X, np.expand_dims(exog_last_info_err[-len(X) :], 1)))
-            elif exog_idx == 1:
-                X = np.hstack(
-                    (
-                        X,
-                        np.expand_dims(
-                            exog_last_info["SPV"][-len(X) :]
-                            + exog_last_info["W"][-len(X) :],
-                            1,
-                        ),
-                    )
-                )
-                exog_last_info_err = (
-                    exog_last_info["SPV"]
-                    + exog_last_info["W"]
-                    - exog_last_info["SPV DA"]
-                    - exog_last_info["W DA"]
-                )
-                X = np.hstack((X, np.expand_dims(exog_last_info_err[-len(X) :], 1)))
-            elif exog_idx == 2:
-                X = np.hstack(
-                    (
-                        X,
-                        np.expand_dims(
-                            exog_last_info[exog_last_info.columns[0]][-len(X) :], 1
-                        ),
-                    )
-                )
-        # add the sum of volume traded for forecasted delivery in the last 60 minutes
-        X = np.hstack(
-            (X, np.expand_dims(np.sum(volume_unaggr_undiff[-len(X) :, -60:], 1), 1))
-        )
-        # add the number of minutes with trades in them in the last 60 minutes
-        X = np.hstack(
-            (X, np.expand_dims(np.sum(volume_unaggr_undiff[-len(X) :, -60:] > 0, 1), 1))
-        )
-        # prepare a set of exog for kernel regression
-        X_exog_fundamental = X[:, -12:]
-        X_exog_fundamental = np.hstack(
-            (X_exog_fundamental, dummies_col[-len(X_exog_fundamental) :, np.newaxis])
-        )  # add the nonlinear dummies column
-
-        X_exog_fundamental_plus_price = X_exog_fundamental.copy()
-        X_exog_fundamental_plus_price = np.hstack(
-            (
-                X_exog_fundamental_plus_price,
-                np.expand_dims(
-                    daily_data_window[
-                        -len(X_exog_fundamental_plus_price) :,
-                        delivery_time,
-                        -(20 + forecasting_horizon),
-                    ],
-                    1,
-                ),
-            )
-        )
-        X_exog_fundamental_plus_price = np.hstack(
-            (
-                X_exog_fundamental_plus_price,
-                np.expand_dims(
-                    daily_data_window[
-                        -len(X_exog_fundamental_plus_price) :,
-                        delivery_time,
-                        -(20 + forecasting_horizon),
-                    ]
-                    - daily_data_window[
-                        -len(X_exog_fundamental_plus_price) :,
-                        delivery_time,
-                        -2 * (20 + forecasting_horizon),
-                    ],
-                    1,
-                ),
-            )
-        )
-
-        X_exog_fundamental = scaler.fit_transform(X_exog_fundamental)
-        X_exog_fundamental_plus_price = scaler.fit_transform(
-            X_exog_fundamental_plus_price
-        )
+    X_exog_fundamental = scaler.fit_transform(X_exog_fundamental)
+    X_exog_fundamental_plus_price = scaler.fit_transform(
+        X_exog_fundamental_plus_price
+    )
 
     if model != "lasso":  # add the nonlinear dummies
         X = np.hstack((X, dummies_col[-len(X) :, np.newaxis]))
@@ -522,45 +450,27 @@ def run_one_day(inp):
     # add the linearized dummies - they do not need to be standardized
     if model == "lasso":
         X = np.hstack((X, linear_dummies[-len(X) :]))
-    shape_of_underlying = np.shape(X)
 
     shift_for_rejection = 0
-    if args.no_filter_exog and model != "lasso":
+
+    # ensure we do not filter exog variables using correlation filter
+    if model != "lasso":
         shift_for_rejection = 21
-    elif (
-        args.no_filter_exog
-    ):  # 6 more dummies columns are present for LASSO due to linear dummies
+    else:  # 6 more dummies columns are present for LASSO due to linear dummies
         shift_for_rejection = 27
 
     corr = np.corrcoef(X, rowvar=False)  # remove columns with correlation => threshold
     p = np.argwhere(np.triu(np.abs(corr) >= 0.6, 1))
-    removed_corr = p.copy()
     p = p[p[:, 1] <= np.shape(X)[1] - shift_for_rejection]
     X = np.delete(X, p[:, 1], axis=1)
 
-    if args.save_corr_rejected_variables:
-        removed_corr_df = pd.DataFrame()
-        removed_corr_df["removed indices"] = removed_corr[:, 1]
-        removed_corr_df["correlated with"] = removed_corr[:, 0]
-        removed_corr_df.to_csv(
-            f"{corr_filter_results_folname}/{start}_{end}_{lookback}_{delivery_time}_{[forecasting_horizon]}_{trade_time}_{remove_zero_var}/{calibration_flag}_{str((pd.to_datetime(date_fore) - timedelta(days=1)).replace(hour=16) + timedelta(minutes=trade_time)).replace(':', ';')}_{forecasting_horizon}_{variables_set}_weights_{weighting_alpha}_window_{window_len}_S1_removed_0_var_{removed_zerovar_foreday_X}_shape_of_underlying_{shape_of_underlying}_init_shape_{initial_shape_X}.csv"
-        )
-
     if np.shape(X_close)[1] > 0:  # if length X_close is nonzero: transform, else copy X
         X_close = scaler.fit_transform(X_close)
-        shape_of_underlying = np.shape(X_close)
         corr = np.corrcoef(X_close, rowvar=False)
         p = np.argwhere(np.triu(np.abs(corr) >= 0.6, 1))
-        removed_corr = p.copy()
         X_close = np.delete(X_close, p[:, 1], axis=1)
-        if args.save_corr_rejected_variables:
-            removed_corr_df = pd.DataFrame()
-            removed_corr_df["removed indices"] = removed_corr[:, 1]
-            removed_corr_df["correlated with"] = removed_corr[:, 0]
-            removed_corr_df.to_csv(
-                f"{corr_filter_results_folname}/{start}_{end}_{lookback}_{delivery_time}_{[forecasting_horizon]}_{trade_time}_{remove_zero_var}/{calibration_flag}_{str((pd.to_datetime(date_fore) - timedelta(days=1)).replace(hour=16) + timedelta(minutes=trade_time)).replace(':', ';')}_{forecasting_horizon}_{variables_set}_weights_{weighting_alpha}_window_{window_len}_S2_removed_0_var_{removed_zerovar_foreday_X_close}_shape_of_underlying_{shape_of_underlying}_init_shape_{initial_shape_X_close}.csv"
-            )
-    else:
+
+    else: # edge case when there is no data in X_close variables set - we default to X
         X_close = X.copy()
 
     # transform the target
@@ -575,7 +485,6 @@ def run_one_day(inp):
         np.shape(X[:, : np.shape(X)[1] - shift_for_rejection])[1] > 0
     ):  # might happen if we remove the 0 variance elements (for example from Sun to Mon)
         selector = VarianceThreshold().fit(X[:, : np.shape(X)[1] - shift_for_rejection])
-        removed_zerovar_tot = np.where(~selector.get_support())[0]
         X[:, : np.shape(X)[1] - shift_for_rejection] = selector.transform(
             X[:, : np.shape(X)[1] - shift_for_rejection]
         )
@@ -586,21 +495,18 @@ def run_one_day(inp):
         try:
             # remove 0 variance variables from close set and if it is only 0 variance substitute the close set
             selector = VarianceThreshold().fit(X_close)
-            removed_zerovar_tot = np.where(~selector.get_support())[0]
             X_close = selector.transform(X_close)
             if np.shape(X_close)[1] == 0:
                 X_close = X.copy()
-        except:
-            pass
+        except Exception as err:
+            print(f"Failed to remove zero vairance variables from S2 set (X_close). Exception: {err}")
 
     # apply the corr filter 2nd time if LASSO and no. of variables is > than no. of samples
     if (
-        args.limit_lasso_variables_no
-        and model == "lasso"
-        and np.shape(X)[1] + 14 > np.shape(X)[0]
+        model == "lasso"
+        and np.shape(X)[1] + lasso_cv_window_days > np.shape(X)[0]
     ):
-        no_of_variables_to_reject = np.shape(X)[1] + 14 - np.shape(X)[0]
-        start_time = time.time()
+        no_of_variables_to_reject = np.shape(X)[1] + lasso_cv_window_days - np.shape(X)[0]
         # tune the correlation threshold to reject more until no. of samples > no. of variables
         corr = np.corrcoef(X, rowvar=False)
         highly_correlated_variables = np.unravel_index(
@@ -617,13 +523,14 @@ def run_one_day(inp):
             axis=1,
         )
 
+    # Forecast with LASSO model
     if args.model == "lasso":
         # prepare a time series appropriate CV setting
         train_idxs = []
         test_idxs = []
-        for cv_test_idx in range(14):  # test on the last two weeks
-            train_idxs.append(list(range(0, len(Y_standarized) - 14 + cv_test_idx)))
-            test_idxs.append(len(Y_standarized) - 14 + cv_test_idx)
+        for cv_test_idx in range(lasso_cv_window_days):  # test on the last two weeks
+            train_idxs.append(list(range(0, len(Y_standarized) - lasso_cv_window_days + cv_test_idx)))
+            test_idxs.append(len(Y_standarized) - lasso_cv_window_days + cv_test_idx)
         # define model and predict for correlation based variables choice from X11 variables set
         reg = LassoLarsCV(
             cv=zip(train_idxs, test_idxs), max_iter=1000, fit_intercept=False
@@ -631,13 +538,13 @@ def run_one_day(inp):
         pred = reg.predict(X[np.newaxis, -1, :])
         results["insample MAE"] = [my_mae(reg.predict(X[:-1, :]), Y_standarized)]
         if preprocess_option == 0:
-            results[f"prediction"] = (
+            results["prediction"] = (
                 pred * np.std(Y[:-1])
                 + np.mean((Y[:-1]))
                 + daily_data_window[-1, delivery_time, -(20 + forecasting_horizon)]
             )  # prediction is the sum of forecasted signal and last known price (so we think of it as fine tuning the naive forecast)
         elif preprocess_option == 1:
-            results[f"prediction"] = (
+            results["prediction"] = (
                 pred * (np.max(Y[:-1]) - np.min(Y[:-1]))
                 + np.min(Y[:-1])
                 + daily_data_window[-1, delivery_time, -(20 + forecasting_horizon)]
@@ -651,13 +558,13 @@ def run_one_day(inp):
             my_mae(reg.predict(X_close[:-1, :]), Y_standarized)
         ]
         if preprocess_option == 0:
-            results[f"prediction_close"] = (
+            results["prediction_close"] = (
                 pred * np.std(Y[:-1])
                 + np.mean((Y[:-1]))
                 + daily_data_window[-1, delivery_time, -(20 + forecasting_horizon)]
             )  # prediction is the sum of forecasted signal and last known price (so we think of it as fine tuning the naive forecast)
         elif preprocess_option == 1:
-            results[f"prediction_close"] = (
+            results["prediction_close"] = (
                 pred * (np.max(Y[:-1]) - np.min(Y[:-1]))
                 + np.min(Y[:-1])
                 + daily_data_window[-1, delivery_time, -(20 + forecasting_horizon)]
@@ -671,31 +578,32 @@ def run_one_day(inp):
             my_mae(reg.predict(X_exog_fundamental_plus_price[:-1, :]), Y_standarized)
         ]
         if preprocess_option == 0:
-            results[f"prediction_exog"] = (
+            results["prediction_exog"] = (
                 pred * np.std(Y[:-1])
                 + np.mean((Y[:-1]))
                 + daily_data_window[-1, delivery_time, -(20 + forecasting_horizon)]
             )  # prediction is the sum of forecasted signal and last known price (so we think of it as fine tuning the naive forecast)
         elif preprocess_option == 1:
-            results[f"prediction_exog"] = (
+            results["prediction_exog"] = (
                 pred * (np.max(Y[:-1]) - np.min(Y[:-1]))
                 + np.min(Y[:-1])
                 + daily_data_window[-1, delivery_time, -(20 + forecasting_horizon)]
             )  # prediction is the sum of forecasted signal and last known price (so we think of it as fine tuning the naive forecast)
 
+    # Forecast with Random Forest model
     elif model == "random_forest":
         regr = RandomForestRegressor(n_estimators=256, max_depth=8)
         regr.fit(X[:-1, :], Y_standarized)
         pred = regr.predict(X[np.newaxis, -1, :])
         results["insample MAE"] = [my_mae(regr.predict(X[:-1, :]), Y_standarized)]
         if preprocess_option == 0:
-            results[f"prediction"] = (
+            results["prediction"] = (
                 pred * np.std(Y[:-1])
                 + np.mean((Y[:-1]))
                 + daily_data_window[-1, delivery_time, -(20 + forecasting_horizon)]
             )  # prediction is the sum of forecasted signal and last known price (so we think of it as fine tuning the naive forecast)
         elif preprocess_option == 1:
-            results[f"prediction"] = (
+            results["prediction"] = (
                 pred * (np.max(Y[:-1]) - np.min(Y[:-1]))
                 + np.min(Y[:-1])
                 + daily_data_window[-1, delivery_time, -(20 + forecasting_horizon)]
@@ -708,13 +616,13 @@ def run_one_day(inp):
             my_mae(regr.predict(X_close[:-1, :]), Y_standarized)
         ]
         if preprocess_option == 0:
-            results[f"prediction_close"] = (
+            results["prediction_close"] = (
                 pred * np.std(Y[:-1])
                 + np.mean((Y[:-1]))
                 + daily_data_window[-1, delivery_time, -(20 + forecasting_horizon)]
             )  # prediction is the sum of forecasted signal and last known price (so we think of it as fine tuning the naive forecast)
         elif preprocess_option == 1:
-            results[f"prediction_close"] = (
+            results["prediction_close"] = (
                 pred * (np.max(Y[:-1]) - np.min(Y[:-1]))
                 + np.min(Y[:-1])
                 + daily_data_window[-1, delivery_time, -(20 + forecasting_horizon)]
@@ -727,26 +635,25 @@ def run_one_day(inp):
             my_mae(regr.predict(X_exog_fundamental_plus_price[:-1, :]), Y_standarized)
         ]
         if preprocess_option == 0:
-            results[f"prediction_exog"] = (
+            results["prediction_exog"] = (
                 pred * np.std(Y[:-1])
                 + np.mean((Y[:-1]))
                 + daily_data_window[-1, delivery_time, -(20 + forecasting_horizon)]
             )  # prediction is the sum of forecasted signal and last known price (so we think of it as fine tuning the naive forecast)
         elif preprocess_option == 1:
-            results[f"prediction_exog"] = (
+            results["prediction_exog"] = (
                 pred * (np.max(Y[:-1]) - np.min(Y[:-1]))
                 + np.min(Y[:-1])
                 + daily_data_window[-1, delivery_time, -(20 + forecasting_horizon)]
             )  # prediction is the sum of forecasted signal and last known price (so we think of it as fine tuning the naive forecast)
 
+    # Forecast with SVR/cSVR models
     elif model == "kernel_hr_naive_mult":
         training_window = X[:-1, :]
         training_window_close = X_close[:-1, :]
-        if args.consider_exog:
-            training_window_fundamental = X_exog_fundamental[:-1, :]
-            training_window_fundamental_plus_price = X_exog_fundamental_plus_price[
-                :-1, :
-            ]
+        training_window_fundamental_plus_price = X_exog_fundamental_plus_price[
+            :-1, :
+        ]
         naive_vec = daily_data_window[7:, delivery_time, -(20 + forecasting_horizon)]
 
         if preprocess_option == 0:
@@ -760,6 +667,7 @@ def run_one_day(inp):
 
         @njit
         def calc_interm_kernel(interm_data, norm: int = 2):
+            '''Calculate the intermediate kernel, i.e. the matrix of distances between two vectors of variables.'''
             plain_kernel = np.zeros((len(interm_data), len(interm_data)))
             for i in range(len(interm_data)):
                 for j in range(len(interm_data)):
@@ -775,38 +683,20 @@ def run_one_day(inp):
             plain_kernel = plain_kernel + plain_kernel.T
             return plain_kernel
 
-        if args.consider_exog:
-            plain_kernel_exog_train = calc_interm_kernel(training_window_fundamental)
-            plain_kernel_exog_test = np.sqrt(
-                np.sum(
-                    (
-                        training_window_fundamental
-                        - X_exog_fundamental[np.newaxis, -1, :]
-                    )
-                    ** 2,
-                    axis=1,
+        # prepare the intermediate kernels (norms matrices)
+        plain_kernel_exog_plus_prices_train = calc_interm_kernel(
+            training_window_fundamental_plus_price
+        )
+        plain_kernel_exog_plus_prices_test = np.sqrt(
+            np.sum(
+                (
+                    training_window_fundamental_plus_price
+                    - X_exog_fundamental_plus_price[np.newaxis, -1, :]
                 )
+                ** 2,
+                axis=1,
             )
-
-            plain_kernel_exog_plus_prices_train = calc_interm_kernel(
-                training_window_fundamental_plus_price
-            )
-            plain_kernel_exog_plus_prices_test = np.sqrt(
-                np.sum(
-                    (
-                        training_window_fundamental_plus_price
-                        - X_exog_fundamental_plus_price[np.newaxis, -1, :]
-                    )
-                    ** 2,
-                    axis=1,
-                )
-            )
-
-        else:
-            plain_kernel_exog_train = None
-            plain_kernel_exog_test = None
-            plain_kernel_exog_plus_prices_train = None
-            plain_kernel_exog_plus_prices_test = None
+        )
 
         plain_kernel_X_1_train = calc_interm_kernel(training_window)
 
@@ -823,7 +713,7 @@ def run_one_day(inp):
         plain_kernel_X_2_test = (
             np.abs(naive_vec_standardized[:-1] - naive_vec_standardized[np.newaxis, -1])
             ** 2
-        )  # in 1D the Euclidean distance is just an abs value raised to power 2
+        )  # formulation used because in 1D the Euclidean distance is just an abs value raised to power 2
 
         plain_kernel_X_2_train = (
             np.abs(
@@ -841,11 +731,6 @@ def run_one_day(inp):
             )
             ** 2
         )
-
-        q_kernel = 0.75  # WARNING only for q >= 1/2
-        q_kernel_naive = 0.75  # WARNING only for q >= 1/2
-        q_data = 0.5
-        q_data_naive = 0.75
 
         kernels_train = [
             plain_kernel_X_1_train,
@@ -869,6 +754,7 @@ def run_one_day(inp):
         )
 
         def fast_calculate_kernel_matrix(stage, kernel_option=0):
+            '''Calculates the full kernel matrix by applying exponents and weights to distance matrix.'''
             sigma = (
                 np.quantile(kernels_train[-1], q_data_naive)
                 / scipy.stats.norm.ppf(q_kernel_naive, loc=0, scale=1)
@@ -954,7 +840,7 @@ def run_one_day(inp):
                     + daily_data_window[-1, delivery_time, -(20 + forecasting_horizon)]
                 )  # prediction is the sum of forecasted signal and last known price (so we think of it as fine tuning the naive forecast)
         df_analysis.to_csv(
-            f"{np.abs(results[f'insample MAE_7'].to_numpy()[0] - results[f'insample MAE_plain_laplace_L2_3'].to_numpy()[0])}_{str(date_fore).replace(':', ';')}_insample_fit_test.csv"
+            f"{np.abs(results['insample MAE_7'].to_numpy()[0] - results['insample MAE_plain_laplace_L2_3'].to_numpy()[0])}_{str(date_fore).replace(':', ';')}_insample_fit_test.csv"
         )
 
     results["actual"] = [daily_data_window[-1, delivery_time, -1]]
@@ -983,12 +869,12 @@ def run_one_day(inp):
         results.to_csv(
             f"{results_folname}/{model}_{start}_{end}_{lookback}_{delivery_time}_{[forecasting_horizon]}_{trade_time}_{remove_zero_var}/{calibration_flag}_{str((pd.to_datetime(date_fore) - timedelta(days=1)).replace(hour=16) + timedelta(minutes=trade_time)).replace(':', ';')}_{forecasting_horizon}_{variables_set}_weights_{weighting_alpha}_window_{window_len}.csv"
         )
-    except:
+    except Exception as err:
         os.remove(
             f"{results_folname}/{model}_{start}_{end}_{lookback}_{delivery_time}_{[forecasting_horizon]}_{trade_time}_{remove_zero_var}/{calibration_flag}_{str((pd.to_datetime(date_fore) - timedelta(days=1)).replace(hour=16) + timedelta(minutes=trade_time)).replace(':', ';')}_{forecasting_horizon}_{variables_set}_weights_{weighting_alpha}_window_{window_len}.csv"
         )
         raise KeyboardInterrupt(
-            "Interrupted on saving: last file removed to avoid empty files."
+            f"Interrupted on saving: last file removed to avoid empty files. Exception: {err}"
         )
 
 

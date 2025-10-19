@@ -97,7 +97,7 @@ dayahead_df.drop(columns='Time from', inplace=True)
 # remove October dst change impact by deduplication and fill March dst NaNs with avg of adjacent periods
 dayahead_df = fill_march_dst(dayahead_df[~dayahead_df.index.duplicated()], col="Price")
 
-dayahead_df.to_csv("Day-Ahead-Quarterly-Data/NEW_DA_prices_qtrly_2018_2020_preprocessed.csv")
+dayahead_df.to_csv("Day-Ahead-Quarterly-Data/DA_prices_qtrly_2018_2020_preprocessed.csv")
 
 print(f"Len matching the required len: {len(dayahead_df[dayahead_df.index >= required_start]) == len(pd.date_range(required_start, required_end, inclusive='left', freq='15min'))}")
 print(f"Any NaNs remaining? {dayahead_df[dayahead_df.index >= required_start].isnull().values.any()}")
@@ -121,7 +121,7 @@ for idx in total_df.index:
 
 # fill the missing hour in march DST by avg of adjacent hours
 df = fill_march_dst(pd.concat(new_df).sort_index(), col="price")
-df.to_csv("ID_auction_preprocessed/NEW_ID_auction_price_2018-2020_preproc.csv")
+df.to_csv("ID_auction_preprocessed/ID_auction_price_2018-2020_preproc.csv")
 
 print(f"Len matching the required len: {len(df[df.index >= required_start]) == len(pd.date_range(required_start, required_end, inclusive='left', freq='15min'))}")
 print(f"Any NaNs remaining? {df[df.index >= required_start].isnull().values.any()}")
@@ -147,7 +147,7 @@ ge_fr_df.drop(columns='Time from', inplace=True)
 # remove dst change impact
 ge_fr_df = fill_march_dst(ge_fr_df[~ge_fr_df.index.duplicated()], col="DE > FR")
 
-ge_fr_df.to_csv("Crossborder/NEW_crossborder_ge_fr_2018-2020.csv")
+ge_fr_df.to_csv("Crossborder/crossborder_ge_fr_2018-2020.csv")
 
 print(f"Len matching the required len: {len(ge_fr_df[ge_fr_df.index >= required_start]) == len(pd.date_range(required_start, required_end, inclusive='left', freq='1H'))}")
 print(f"Any NaNs remaining? {ge_fr_df[ge_fr_df.index >= required_start].isnull().values.any()}")
@@ -174,11 +174,10 @@ load_df.drop(columns='Time from', inplace=True)
 # remove October dst change impact
 load_df = fill_march_dst(load_df[~load_df.index.duplicated()], col="Actual")
 
-load_df.to_csv("Load/NEW_Load_2018-2020.csv")
-
 # special handling of missing day-ahead forecasts through imputation of synthetic forecasts generated based on the adjacent forecasts errors
-
 filled_load = fill_forecasts(load_df)
+filled_load.to_csv("Load/Load_2018-2020.csv")
+
 print(f"Len matching the required len: {len(filled_load[filled_load.index >= required_start]) == len(pd.date_range(required_start, required_end, inclusive='left', freq='15min'))}")
 print(f"Any NaNs remaining? {filled_load[filled_load.index >= required_start].isnull().values.any()}")
 
@@ -232,4 +231,4 @@ gen_df = fill_march_dst(gen_df[~gen_df.index.duplicated()], col="SPV")
 print(f"Len matching the required len: {len(gen_df[gen_df.index >= required_start]) == len(pd.date_range(required_start, required_end, inclusive='left', freq='15min'))}")
 print(f"Any NaNs remaining? {gen_df[gen_df.index >= required_start].isnull().values.any()}")
 
-gen_df.to_csv("Generation/NEW_Generation_2018-2020.csv")
+gen_df.to_csv("Generation/Generation_2018-2020.csv")
