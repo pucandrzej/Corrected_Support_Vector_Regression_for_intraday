@@ -879,7 +879,6 @@ if __name__ == "__main__":
     con = sqlite3.connect("data_ID.db")
     sql_str = f"SELECT * FROM with_dummies WHERE Index_daily <= {trade_time};"  # load only the data required for simu, so up to trade time
     daily_data = pd.read_sql(sql_str, con)[[str(i) for i in range(193)]].to_numpy()
-    end = time.time()
     daily_data = np.reshape(
         daily_data, (np.shape(daily_data)[0] // trade_time, trade_time, 193)
     )
@@ -1046,9 +1045,9 @@ if __name__ == "__main__":
                     initargs=(raw_arr, data_shape),
                 ) as p:
                     _ = p.map(run_one_day, inputlist)
-    end = time.time()
-    print(end - simu_start, "Total time of simulation:")
+    simu_end = time.time()
+    print(simu_end - simu_start, "Total time of simulation:")
     with open(
         f"timing_results_model_{model}_d_{delivery_time}_t_{trade_time}.txt", "w"
     ) as file:
-        file.write(f"Execution time: {end - simu_start} seconds\n")
+        file.write(f"Execution time: {simu_end - simu_start} seconds\n")
