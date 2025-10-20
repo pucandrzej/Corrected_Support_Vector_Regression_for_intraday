@@ -175,7 +175,7 @@ load_df.drop(columns='Time from', inplace=True)
 load_df = fill_march_dst(load_df[~load_df.index.duplicated()], col="Actual")
 
 # special handling of missing day-ahead forecasts through imputation of synthetic forecasts generated based on the adjacent forecasts errors
-filled_load = fill_forecasts(load_df)
+filled_load = fill_forecasts(load_df, seed=0)
 filled_load.to_csv("Load/Load_2018-2020.csv")
 
 print(f"Len matching the required len: {len(filled_load[filled_load.index >= required_start]) == len(pd.date_range(required_start, required_end, inclusive='left', freq='15min'))}")
