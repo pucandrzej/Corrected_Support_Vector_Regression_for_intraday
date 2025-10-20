@@ -45,6 +45,8 @@ for model in args.models:
         "w",
     )
     for shift_trade in [30, 60, 90, 120, 150, 180]:  # delivery time - shift_trade is the trade time
+        if shift_trade != 60 and model != 'kernel_hr_naive_mult':
+            continue
         for delivery_time in range(int(args.start_delivery), int(args.end_delivery)):
             trade_time = delivery_time * 15 + 8 * 60 - shift_trade
             for variable_set in [11]:
