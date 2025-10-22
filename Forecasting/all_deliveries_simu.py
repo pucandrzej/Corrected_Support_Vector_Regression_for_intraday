@@ -18,7 +18,7 @@ parser.add_argument(
 )
 parser.add_argument(
     "--models",
-    default=["kernel_hr_naive_mult", "lasso", "random_forest"],
+    default=["kernel_hr_naive_mult"],
     help="Models to simulate.",
 )
 parser.add_argument(
@@ -44,10 +44,12 @@ for model in args.models:
         f"TOTAL_SIMU_LOG_{start}_{args.end_delivery}_{model}_{args.calibration_window_len}_{args.kernel_solver}.txt",
         "w",
     )
-    for shift_trade in [30, 60, 90, 120, 150, 180]:  # delivery time - shift_trade is the trade time
+    for shift_trade in [90, 120, 150, 180]:  # delivery time - shift_trade is the trade time
         if shift_trade != 60 and model != 'kernel_hr_naive_mult':
             continue
         for delivery_time in range(int(args.start_delivery), int(args.end_delivery)):
+            if shift_trade == 90 and delivery_time < 86:
+                continue
             trade_time = delivery_time * 15 + 8 * 60 - shift_trade
             for variable_set in [11]:
                 joblist.append(
