@@ -59,23 +59,23 @@ parser.add_argument(
     default=28,
     help="For every date consider a historical results from a calibration window.",
 )
-parser.add_argument("--kernel_solver", default="SVR", help="Model to use: KRR or SVR")
 
 parser.add_argument("--processes", default=1, help="No of processes")
 
 parser.add_argument('--special_results_directory', default=None, help='Running on WCSS Wroclaw University of Science and Technology supercomputers requires us to save the results in dedicated path.')
 
-# hyperparameters of the models
-svr_epsilon = 0.1
+# arbitrarily set hyperparameters of the models
+svr_epsilon = 0.1 # (c)SVR parameters
 C = 1.0
-preprocess_option = 0  # 0 - standardise, 1 - normalize to [0,1]
-alpha_KRR = 0.5
-lasso_cv_window_days = 14
 q_kernel = 0.75
 q_kernel_naive = 0.75
 q_data = 0.5
 q_data_naive = 0.75
-remove_zero_var = True
+preprocess_option = 0  # 0 - standardize, 1 - normalize to [0,1]
+lasso_cv_window_days = 14 # cross validation window length for the LASSO model
+remove_zero_var = True # remove the zero variance variables from the sets S1 S2 S3
+s1_variables_set_corr_threshold = 0.8
+s2_variables_set_corr_threshold = 0.95
 # Below are the legacy arguments to keep the results files naming convention
 window_len = 'expanding'
 weighting_alpha = 1
@@ -88,7 +88,6 @@ args = parser.parse_args()
 if args.special_results_directory is not None:
     results_folname = os.path.join(args.special_results_directory, results_folname)
 forecasting_horizons = args.forecasting_horizons
-kernel_model = args.kernel_solver
 model = args.model
 start = args.daterange_start
 end = args.daterange_end
@@ -464,14 +463,14 @@ def run_one_day(inp):
         shift_for_rejection = 27
 
     corr = np.corrcoef(X, rowvar=False)  # remove columns with correlation => threshold
-    p = np.argwhere(np.triu(np.abs(corr) >= 0.6, 1))
+    p = np.argwhere(np.triu(np.abs(corr) >= s1_variables_set_corr_threshold, 1))
     p = p[p[:, 1] <= np.shape(X)[1] - shift_for_rejection]
     X = np.delete(X, p[:, 1], axis=1)
 
     if np.shape(X_close)[1] > 0:  # if length X_close is nonzero: transform, else copy X
         X_close = scaler.fit_transform(X_close)
         corr = np.corrcoef(X_close, rowvar=False)
-        p = np.argwhere(np.triu(np.abs(corr) >= 0.6, 1))
+        p = np.argwhere(np.triu(np.abs(corr) >= s2_variables_set_corr_threshold, 1))
         X_close = np.delete(X_close, p[:, 1], axis=1)
 
     else: # edge case when there is no data in X_close variables set - we default to X
@@ -815,10 +814,7 @@ def run_one_day(inp):
             training_matrix = fast_calculate_kernel_matrix(
                 stage="train", kernel_option=kernel_choice
             )
-            if kernel_model == "KRR":
-                estimator = KernelRidge(kernel="precomputed", alpha=alpha_KRR)
-            elif kernel_model == "SVR":
-                estimator = SVR(kernel="precomputed", epsilon=svr_epsilon, C=C)
+            estimator = SVR(kernel="precomputed", epsilon=svr_epsilon, C=C)
             estimator.fit(training_matrix, Y_standarized)
             results[f"insample MAE_{kernel_choice}"] = [
                 my_mae(estimator.predict(training_matrix), Y_standarized)

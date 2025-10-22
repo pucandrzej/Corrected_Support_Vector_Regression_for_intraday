@@ -27,7 +27,6 @@ parser.add_argument(
     help="For every date consider a historical results from a calibration window.",
 )
 parser.add_argument('--special_results_directory', default=None, help='Running on WCSS Wroclaw University of Science and Technology supercomputers requires us to save the results in dedicated path.')
-parser.add_argument("--kernel_solver", default="SVR", help="Model to use: KRR or SVR")
 args = parser.parse_args()
 
 # additional parameters
@@ -37,11 +36,11 @@ for model in args.models:
     start = args.start_delivery
     joblist = []
     sys.stderr = open(
-        f"TOTAL_SIMU_ERR_{start}_{args.end_delivery}_{model}_{args.calibration_window_len}_{args.kernel_solver}.txt",
+        f"TOTAL_SIMU_ERR_{start}_{args.end_delivery}_{model}_{args.calibration_window_len}.txt",
         "w",
     )
     sys.stdout = open(
-        f"TOTAL_SIMU_LOG_{start}_{args.end_delivery}_{model}_{args.calibration_window_len}_{args.kernel_solver}.txt",
+        f"TOTAL_SIMU_LOG_{start}_{args.end_delivery}_{model}_{args.calibration_window_len}.txt",
         "w",
     )
     for shift_trade in [90, 120, 150, 180]:  # delivery time - shift_trade is the trade time
@@ -64,8 +63,6 @@ for model in args.models:
                         str(delivery_time),
                         "--variable_set",
                         str(variable_set),
-                        "--kernel_solver",
-                        args.kernel_solver,
                         "--calibration_window_len",
                         str(args.calibration_window_len),
                         "--processes",
