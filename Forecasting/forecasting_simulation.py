@@ -1,5 +1,5 @@
 """
-File contains the code for point forecasts methods: cSVR, SVR, LASSO and RF, backtested on continuous market prices on DE intraday market.
+File contains the code for point forecasts methods (cSVR, SVR, LASSO and RF) backtest on continuous market prices from the DE intraday market.
 """
 
 import pandas as pd
@@ -30,27 +30,27 @@ from remove_zerovar import remove_zerovar
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
-    "--model", default="kernel_hr_naive_mult", help="Model for forecasting"
+    "--model", default="kernel_hr_naive_mult", help="Model for forecasting."
 )
 parser.add_argument(
-    "--daterange_start", default="2020-01-01", help="Start of eval data"
+    "--daterange_start", default="2020-01-01", help="Start of eval data."
 )
-parser.add_argument("--daterange_end", default="2020-12-31", help="End of eval data")
-parser.add_argument("--lookback", default=365 + 62, help="Training window length")
+parser.add_argument("--daterange_end", default="2020-12-31", help="End of eval data.")
+parser.add_argument("--lookback", default=365 + 62, help="Training window length.")
 parser.add_argument(
     "--delivery_time",
     default=32,
-    help="Index from 0 to 95 of the delivery quarter of the day",
+    help="Index from 0 to 95 of the delivery quarter of the day.",
 )
 parser.add_argument(
     "--forecasting_horizons",
     default=[30, 60, 90, 120, 150, 180, 210, 300, 390, 480],
-    help="Minutes from the forecast to the trade that we want to forecast price for",
+    help="Minutes from the forecast to the trade that we want to forecast price for.",
 )
 parser.add_argument(
     "--trade_time",
     default=32 * 15 + 8 * 60 - 60,
-    help="Minute before the delivery that we want to trade in",
+    help="Minute before the delivery that we want to trade in.",
 )
 parser.add_argument(
     "--calibration_window_len",
@@ -58,9 +58,13 @@ parser.add_argument(
     help="Calibration window length. The logic assumes at least one day of calibration window.",
 )
 
-parser.add_argument("--processes", default=1, help="No of processes")
+parser.add_argument("--processes", default=1, help="No of parallel workers to run.")
 
-parser.add_argument('--special_results_directory', default=None, help='Running on WCSS Wroclaw University of Science and Technology supercomputers requires us to save the results in dedicated path.')
+parser.add_argument(
+    "--special_results_directory",
+    default=None,
+    help="Running on WCSS Wroclaw University of Science and Technology supercomputers requires us to save the results in dedicated path.",
+)
 
 # read the args from args parser
 args = parser.parse_args()
@@ -74,23 +78,23 @@ delivery_time = int(args.delivery_time)
 calibration_window_len = int(args.calibration_window_len)
 
 # define the arbitrarily set hyperparameters of the models
-dates = pd.date_range(start, end) # test window dates
-svr_epsilon = 0.1 # (c)SVR parameters
+dates = pd.date_range(start, end)  # test window dates
+svr_epsilon = 0.1  # (c)SVR parameters
 C = 1.0
 q_kernel = 0.75
 q_kernel_naive = 0.75
 q_data = 0.5
 q_data_naive = 0.75
-lasso_max_iterations = 1000 # lasso parameters
+lasso_max_iterations = 1000  # lasso parameters
 lasso_cv_window_days = 14
-random_forest_n_estimators = 256 # random forest parameters
-random_forest_max_depth = 8 
+random_forest_n_estimators = 256  # random forest parameters
+random_forest_max_depth = 8
 preprocess_option = 0  # 0 - standardize, 1 - normalize to [0,1]
-remove_zero_var = True # remove the zero variance variables from the sets S1 S2 S3
+remove_zero_var = True  # remove the zero variance variables from the sets S1 S2 S3
 s1_variables_set_corr_threshold = 0.8
 s2_variables_set_corr_threshold = 0.95
 # Below are the legacy arguments to keep the results files naming convention
-window_len = 'expanding'
+window_len = "expanding"
 weighting_alpha = 1
 variable_set = 11
 
@@ -164,16 +168,23 @@ ge_fr = pd.read_csv(
 ge_fr.index = pd.to_datetime(ge_fr.index)
 ge_fr = ge_fr[ge_fr.index >= datetime(year=2018, month=10, day=31)]
 
+
 @nb_jit(nopython=True)
 def my_mae(X, Y):
     return np.mean(np.abs(X - Y))
 
-def inverse_transformation(pred, naive, Y_raw_training_std, Y_raw_training_mean, Y_raw_training_min, Y_raw_training_max):
+
+def inverse_transformation(
+    pred,
+    naive,
+    Y_raw_training_std,
+    Y_raw_training_mean,
+    Y_raw_training_min,
+    Y_raw_training_max,
+):
     if preprocess_option == 0:
         inversely_transformed_pred = (
-            pred * Y_raw_training_std
-            + Y_raw_training_mean
-            + naive
+            pred * Y_raw_training_std + Y_raw_training_mean + naive
         )
     elif preprocess_option == 1:
         inversely_transformed_pred = (
@@ -184,16 +195,19 @@ def inverse_transformation(pred, naive, Y_raw_training_std, Y_raw_training_mean,
 
     return inversely_transformed_pred
 
+
 # a global dictionary storing the variables passed from the initializer - we use it to pass the same data between workers
 var_dict = {}
 
+
 def init_worker(Model_data, Model_data_shape):
-    '''Used as a supplementary function to send big numpy array between workers.'''
+    """Used as a supplementary function to send big numpy array between workers."""
     var_dict["Model_data"] = Model_data
     var_dict["Model_data_shape"] = Model_data_shape
 
+
 def run_one_day(inp):
-    '''Runs the main simulation for certain model, delivery and day. Saves resulting forecasts in a csv file.'''
+    """Runs the main simulation for certain model, delivery and day. Saves resulting forecasts in a csv file."""
     idx = inp[0]
     date_fore = inp[1]
     forecasting_horizon = inp[2]
@@ -218,7 +232,7 @@ def run_one_day(inp):
     Y = (
         daily_data_window[:, delivery_time, -1]
         - daily_data_window[:, delivery_time, -(20 + forecasting_horizon)]
-    ) # described variable (forecasted price array)
+    )  # described variable (forecasted price array)
 
     # extract the volume for forecasted delivery
     volume_unaggr_undiff = daily_data_window[
@@ -230,7 +244,9 @@ def run_one_day(inp):
     # train the model & forecast
     results = pd.DataFrame()
 
-    X_exog = X[:, -1:, :]  # declare set of all the exogenous variables (starting with agg volume)
+    X_exog = X[
+        :, -1:, :
+    ]  # declare set of all the exogenous variables (starting with agg volume)
 
     X_close = X[
         :, np.max([delivery_time - 4, 0]) : np.min([delivery_time + 1, 96]), -60:
@@ -286,32 +302,25 @@ def run_one_day(inp):
     # add the last known aggregated volume information
     X = np.hstack((X, X_exog[-len(X) :, :, -1]))
 
-    delivery_hour = int(delivery_time * 0.25) # hour in which the delivery is
-    first_delivery_minute = int((delivery_time * 0.25 - delivery_hour) * 4 * 15) # first minute of delivery
+    delivery_hour = int(delivery_time * 0.25)  # hour in which the delivery is
+    first_delivery_minute = int(
+        (delivery_time * 0.25 - delivery_hour) * 4 * 15
+    )  # first minute of delivery
 
     # add load and generation forecasts
     Load_fore = Load[
         (Load.index.hour == delivery_hour)
-        & (
-            Load.index.minute
-            == first_delivery_minute
-        )
+        & (Load.index.minute == first_delivery_minute)
     ][1 : 1 + idx]["Forecast"]
     X = np.hstack((X, np.expand_dims(Load_fore[-len(X) :], 1)))
     Gen_fore = (
         gen[
             (gen.index.hour == delivery_hour)
-            & (
-                gen.index.minute
-                == first_delivery_minute
-            )
+            & (gen.index.minute == first_delivery_minute)
         ][1 : 1 + idx]["SPV DA"]
         + gen[
             (gen.index.hour == delivery_hour)
-            & (
-                gen.index.minute
-                == first_delivery_minute
-            )
+            & (gen.index.minute == first_delivery_minute)
         ][1 : 1 + idx]["W DA"]
     )
     X = np.hstack((X, np.expand_dims(Gen_fore[-len(X) :], 1)))
@@ -319,20 +328,14 @@ def run_one_day(inp):
     # add an actual DA price for the delivery time
     DA_price = DA_qtrly[
         (DA_qtrly.index.hour == delivery_hour)
-        & (
-            DA_qtrly.index.minute
-            == first_delivery_minute
-        )
+        & (DA_qtrly.index.minute == first_delivery_minute)
     ][1 : 1 + idx]["Price"]
     X = np.hstack((X, np.expand_dims(DA_price[-len(X) :], 1)))
 
     # add an actual ID price for the delivery time
     DA_price = ID_qtrly[
         (ID_qtrly.index.hour == delivery_hour)
-        & (
-            ID_qtrly.index.minute
-            == first_delivery_minute
-        )
+        & (ID_qtrly.index.minute == first_delivery_minute)
     ][1 : 1 + idx]["price"]
     X = np.hstack((X, np.expand_dims(DA_price[-len(X) :], 1)))
 
@@ -349,12 +352,13 @@ def run_one_day(inp):
         datetime_avail = (pd.to_datetime(date_fore) - timedelta(days=1)).replace(
             hour=16
         ) + timedelta(minutes=exog_avail_mins - shift)
-        if datetime_avail.date() < date_fore.date():  # case in which we forecast for the next day delivery
+        if (
+            datetime_avail.date() < date_fore.date()
+        ):  # case in which we forecast for the next day delivery
             exog_df = exog_df[exog_df.index <= pd.to_datetime(date_fore.date())]
         else:
             exog_df = exog_df[
-                exog_df.index
-                <= pd.to_datetime(date_fore.date() + timedelta(days=1))
+                exog_df.index <= pd.to_datetime(date_fore.date() + timedelta(days=1))
             ]
 
         if exog_idx != 2:
@@ -366,12 +370,8 @@ def run_one_day(inp):
             exog_last_info = exog_df[exog_df.index.hour == datetime_avail.hour]
 
         if exog_idx == 0:
-            X = np.hstack(
-                (X, np.expand_dims(exog_last_info["Actual"][-len(X) :], 1))
-            )
-            exog_last_info_err = (
-                exog_last_info["Actual"] - exog_last_info["Forecast"]
-            )
+            X = np.hstack((X, np.expand_dims(exog_last_info["Actual"][-len(X) :], 1)))
+            exog_last_info_err = exog_last_info["Actual"] - exog_last_info["Forecast"]
             X = np.hstack((X, np.expand_dims(exog_last_info_err[-len(X) :], 1)))
         elif exog_idx == 1:
             X = np.hstack(
@@ -414,7 +414,7 @@ def run_one_day(inp):
         (X_exog_fundamental, dummies_col[-len(X_exog_fundamental) :, np.newaxis])
     )  # add the nonlinear dummies column
 
-    X_exog_fundamental_plus_price = np.hstack( # add the naive to X exog
+    X_exog_fundamental_plus_price = np.hstack(  # add the naive to X exog
         (
             X_exog_fundamental,
             np.expand_dims(
@@ -427,7 +427,7 @@ def run_one_day(inp):
             ),
         )
     )
-    X_exog_fundamental_plus_price = np.hstack( # add the differenced naive to X exog
+    X_exog_fundamental_plus_price = np.hstack(  # add the differenced naive to X exog
         (
             X_exog_fundamental_plus_price,
             np.expand_dims(
@@ -446,9 +446,7 @@ def run_one_day(inp):
         )
     )
 
-    X_exog_fundamental_plus_price = scaler.fit_transform(
-        X_exog_fundamental_plus_price
-    )
+    X_exog_fundamental_plus_price = scaler.fit_transform(X_exog_fundamental_plus_price)
 
     if model != "lasso":  # add the nonlinear dummies
         X = np.hstack((X, dummies_col[-len(X) :, np.newaxis]))
@@ -478,7 +476,7 @@ def run_one_day(inp):
         p = np.argwhere(np.triu(np.abs(corr) >= s2_variables_set_corr_threshold, 1))
         X_close = np.delete(X_close, p[:, 1], axis=1)
 
-    else: # edge case when there is no data in X_close variables set - we default to X
+    else:  # edge case when there is no data in X_close variables set - we default to X
         X_close = X.copy()
 
     # define constants for transformation and inverse transformation
@@ -487,13 +485,17 @@ def run_one_day(inp):
     Y_raw_training_mean = np.mean(Y_raw_training)
     Y_raw_training_min = np.min(Y_raw_training)
     Y_raw_training_max = np.max(Y_raw_training)
-    inverse_transformation_naive = daily_data_window[-1, delivery_time, -(20 + forecasting_horizon)]
+    inverse_transformation_naive = daily_data_window[
+        -1, delivery_time, -(20 + forecasting_horizon)
+    ]
 
     # transform the target
     if preprocess_option == 0:
         Y_standarized = (Y_raw_training - Y_raw_training_mean) / Y_raw_training_std
     elif preprocess_option == 1:
-        Y_standarized = (Y_raw_training - Y_raw_training_min) / (Y_raw_training_max - Y_raw_training_min)
+        Y_standarized = (Y_raw_training - Y_raw_training_min) / (
+            Y_raw_training_max - Y_raw_training_min
+        )
     Y_standarized = Y_standarized[-len(X) + 1 :]
 
     # remove 0 variance variables
@@ -515,13 +517,16 @@ def run_one_day(inp):
             if np.shape(X_close)[1] == 0:
                 X_close = X.copy()
         except Exception as err:
-            print(f"Failed to remove zero vairance variables from S2 set (X_close). Exception: {err}")
+            print(
+                f"Failed to remove zero vairance variables from S2 set (X_close). Exception: {err}"
+            )
 
     if (
-        model == "lasso"
-        and np.shape(X)[1] + lasso_cv_window_days > np.shape(X)[0]
-    ): # apply the corr filter 2nd time if LASSO and no. of variables is > than no. of samples
-        no_of_variables_to_reject = np.shape(X)[1] + lasso_cv_window_days - np.shape(X)[0]
+        model == "lasso" and np.shape(X)[1] + lasso_cv_window_days > np.shape(X)[0]
+    ):  # apply the corr filter 2nd time if LASSO and no. of variables is > than no. of samples
+        no_of_variables_to_reject = (
+            np.shape(X)[1] + lasso_cv_window_days - np.shape(X)[0]
+        )
         corr = np.corrcoef(X, rowvar=False)
         highly_correlated_variables = np.unravel_index(
             np.argsort(np.triu(np.abs(corr), 1), axis=None),
@@ -543,66 +548,122 @@ def run_one_day(inp):
         train_idxs = []
         test_idxs = []
         for cv_test_idx in range(lasso_cv_window_days):  # test on the last two weeks
-            train_idxs.append(list(range(0, len(Y_standarized) - lasso_cv_window_days + cv_test_idx)))
+            train_idxs.append(
+                list(range(0, len(Y_standarized) - lasso_cv_window_days + cv_test_idx))
+            )
             test_idxs.append(len(Y_standarized) - lasso_cv_window_days + cv_test_idx)
         # PREDICT S1
         reg = LassoLarsCV(
-            cv=zip(train_idxs, test_idxs), max_iter=lasso_max_iterations, fit_intercept=False # fit_intercept is false as we already fit dummies which sum to 1 in every index of training window
+            cv=zip(train_idxs, test_idxs),
+            max_iter=lasso_max_iterations,
+            fit_intercept=False,  # fit_intercept is false as we already fit dummies which sum to 1 in every index of training window
         ).fit(X[:-1, :], Y_standarized)
         pred = reg.predict(X[np.newaxis, -1, :])
         results["insample MAE"] = [my_mae(reg.predict(X[:-1, :]), Y_standarized)]
-        results["prediction"] = inverse_transformation(pred, inverse_transformation_naive, Y_raw_training_std, Y_raw_training_mean, Y_raw_training_min, Y_raw_training_max)
+        results["prediction"] = inverse_transformation(
+            pred,
+            inverse_transformation_naive,
+            Y_raw_training_std,
+            Y_raw_training_mean,
+            Y_raw_training_min,
+            Y_raw_training_max,
+        )
         # PREDICT S2
         reg = LassoLarsCV(
-            cv=zip(train_idxs, test_idxs), max_iter=lasso_max_iterations, fit_intercept=False
+            cv=zip(train_idxs, test_idxs),
+            max_iter=lasso_max_iterations,
+            fit_intercept=False,
         ).fit(X_close[:-1, :], Y_standarized)
         pred = reg.predict(X_close[np.newaxis, -1, :])
         results["insample MAE close"] = [
             my_mae(reg.predict(X_close[:-1, :]), Y_standarized)
         ]
-        results["prediction_close"] = inverse_transformation(pred, inverse_transformation_naive, Y_raw_training_std, Y_raw_training_mean, Y_raw_training_min, Y_raw_training_max)
+        results["prediction_close"] = inverse_transformation(
+            pred,
+            inverse_transformation_naive,
+            Y_raw_training_std,
+            Y_raw_training_mean,
+            Y_raw_training_min,
+            Y_raw_training_max,
+        )
         # PREDICT S3
         reg = LassoLarsCV(
-            cv=zip(train_idxs, test_idxs), max_iter=lasso_max_iterations, fit_intercept=False
+            cv=zip(train_idxs, test_idxs),
+            max_iter=lasso_max_iterations,
+            fit_intercept=False,
         ).fit(X_exog_fundamental_plus_price[:-1, :], Y_standarized)
         pred = reg.predict(X_exog_fundamental_plus_price[np.newaxis, -1, :])
         results["insample MAE exog"] = [
             my_mae(reg.predict(X_exog_fundamental_plus_price[:-1, :]), Y_standarized)
         ]
-        results["prediction_exog"] = inverse_transformation(pred, inverse_transformation_naive, Y_raw_training_std, Y_raw_training_mean, Y_raw_training_min, Y_raw_training_max)
+        results["prediction_exog"] = inverse_transformation(
+            pred,
+            inverse_transformation_naive,
+            Y_raw_training_std,
+            Y_raw_training_mean,
+            Y_raw_training_min,
+            Y_raw_training_max,
+        )
 
     # Forecast with Random Forest model
     elif model == "random_forest":
         # PREDICT S1
-        regr = RandomForestRegressor(n_estimators=random_forest_n_estimators, max_depth=random_forest_max_depth)
+        regr = RandomForestRegressor(
+            n_estimators=random_forest_n_estimators, max_depth=random_forest_max_depth
+        )
         regr.fit(X[:-1, :], Y_standarized)
         pred = regr.predict(X[np.newaxis, -1, :])
         results["insample MAE"] = [my_mae(regr.predict(X[:-1, :]), Y_standarized)]
-        results["prediction"] = inverse_transformation(pred, inverse_transformation_naive, Y_raw_training_std, Y_raw_training_mean, Y_raw_training_min, Y_raw_training_max)
+        results["prediction"] = inverse_transformation(
+            pred,
+            inverse_transformation_naive,
+            Y_raw_training_std,
+            Y_raw_training_mean,
+            Y_raw_training_min,
+            Y_raw_training_max,
+        )
         # PREDICT S2
-        regr = RandomForestRegressor(n_estimators=random_forest_n_estimators, max_depth=random_forest_max_depth)
+        regr = RandomForestRegressor(
+            n_estimators=random_forest_n_estimators, max_depth=random_forest_max_depth
+        )
         regr.fit(X_close[:-1, :], Y_standarized)
         pred = regr.predict(X_close[np.newaxis, -1, :])
         results["insample MAE close"] = [
             my_mae(regr.predict(X_close[:-1, :]), Y_standarized)
         ]
-        results["prediction_close"] = inverse_transformation(pred, inverse_transformation_naive, Y_raw_training_std, Y_raw_training_mean, Y_raw_training_min, Y_raw_training_max)
+        results["prediction_close"] = inverse_transformation(
+            pred,
+            inverse_transformation_naive,
+            Y_raw_training_std,
+            Y_raw_training_mean,
+            Y_raw_training_min,
+            Y_raw_training_max,
+        )
         # PREDICT S3
-        regr = RandomForestRegressor(n_estimators=random_forest_n_estimators, max_depth=random_forest_max_depth)
+        regr = RandomForestRegressor(
+            n_estimators=random_forest_n_estimators, max_depth=random_forest_max_depth
+        )
         regr.fit(X_exog_fundamental_plus_price[:-1, :], Y_standarized)
         pred = regr.predict(X_exog_fundamental_plus_price[np.newaxis, -1, :])
         results["insample MAE exog"] = [
             my_mae(regr.predict(X_exog_fundamental_plus_price[:-1, :]), Y_standarized)
         ]
-        results["prediction_exog"] = inverse_transformation(pred, inverse_transformation_naive, Y_raw_training_std, Y_raw_training_mean, Y_raw_training_min, Y_raw_training_max)
+        results["prediction_exog"] = inverse_transformation(
+            pred,
+            inverse_transformation_naive,
+            Y_raw_training_std,
+            Y_raw_training_mean,
+            Y_raw_training_min,
+            Y_raw_training_max,
+        )
 
     # Forecast with SVR/cSVR models
     elif model == "kernel_hr_naive_mult":
-        training_window = X[:-1, :] # define the training windows to prepare training kernel matrices
-        training_window_close = X_close[:-1, :]
-        training_window_fundamental_plus_price = X_exog_fundamental_plus_price[
+        training_window = X[
             :-1, :
-        ]
+        ]  # define the training windows to prepare training kernel matrices
+        training_window_close = X_close[:-1, :]
+        training_window_fundamental_plus_price = X_exog_fundamental_plus_price[:-1, :]
         naive_vec = daily_data_window[7:, delivery_time, -(20 + forecasting_horizon)]
 
         if preprocess_option == 0:
@@ -616,7 +677,7 @@ def run_one_day(inp):
 
         @njit
         def calc_interm_kernel(interm_data, norm: int = 2):
-            '''Calculate the intermediate kernel, i.e. the matrix of distances between two vectors of variables.'''
+            """Calculate the intermediate kernel, i.e. the matrix of distances between two vectors of variables."""
             plain_kernel = np.zeros((len(interm_data), len(interm_data)))
             for i in range(len(interm_data)):
                 for j in range(len(interm_data)):
@@ -697,7 +758,7 @@ def run_one_day(inp):
         )
 
         def fast_calculate_kernel_matrix(stage, kernel_option=0):
-            '''Calculates the full kernel matrix by applying exponents and weights to the distance matrix.'''
+            """Calculates the full kernel matrix by applying exponents and weights to the distance matrix."""
             sigma = (
                 np.quantile(kernels_train[-1], q_data_naive)
                 / scipy.stats.norm.ppf(q_kernel_naive, loc=0, scale=1)
@@ -744,9 +805,9 @@ def run_one_day(inp):
 
         # train and forecast (c)SVR for every variables set and kernel configuration
         for kernel_choice in [
-            1, # S1
-            2, # S2
-            7, # S3 (legacy name from testing procedures performed at early stage of development)
+            1,  # S1
+            2,  # S2
+            7,  # S3 (legacy name from testing procedures performed at early stage of development)
             "plain_laplace_L2_1",
             "plain_laplace_L2_2",
             "plain_laplace_L2_3",
@@ -763,18 +824,23 @@ def run_one_day(inp):
                 stage="test", kernel_option=kernel_choice
             )
             pred = estimator.predict(test_matrix.reshape(1, -1))
-            results[f"prediction_{kernel_choice}"] = inverse_transformation(pred, inverse_transformation_naive, Y_raw_training_std, Y_raw_training_mean, Y_raw_training_min, Y_raw_training_max)
+            results[f"prediction_{kernel_choice}"] = inverse_transformation(
+                pred,
+                inverse_transformation_naive,
+                Y_raw_training_std,
+                Y_raw_training_mean,
+                Y_raw_training_min,
+                Y_raw_training_max,
+            )
 
     results["actual"] = [daily_data_window[-1, delivery_time, -1]]
-    results["naive"] = [
-        inverse_transformation_naive
-    ]
+    results["naive"] = [inverse_transformation_naive]
 
     try:
         results.to_csv(
             f"{results_folname}/{model}_{start}_{end}_{lookback}_{delivery_time}_{[forecasting_horizon]}_{trade_time}_{remove_zero_var}/{calibration_flag}_{str((pd.to_datetime(date_fore) - timedelta(days=1)).replace(hour=16) + timedelta(minutes=trade_time)).replace(':', ';')}_{forecasting_horizon}_{variable_set}_weights_{weighting_alpha}_window_{window_len}.csv"
         )
-    except Exception as err: # raise to avoid saving an empty file
+    except Exception as err:  # raise to avoid saving an empty file
         os.remove(
             f"{results_folname}/{model}_{start}_{end}_{lookback}_{delivery_time}_{[forecasting_horizon]}_{trade_time}_{remove_zero_var}/{calibration_flag}_{str((pd.to_datetime(date_fore) - timedelta(days=1)).replace(hour=16) + timedelta(minutes=trade_time)).replace(':', ';')}_{forecasting_horizon}_{variable_set}_weights_{weighting_alpha}_window_{window_len}.csv"
         )
@@ -784,7 +850,7 @@ def run_one_day(inp):
 
 
 if __name__ == "__main__":
-    # load the continuous intraday market data 
+    # load the continuous intraday market data
     con = sqlite3.connect("data_ID.db")
     sql_str = f"SELECT * FROM with_dummies WHERE Index_daily <= {trade_time};"  # load only the data required for simu, so up to trade time
     daily_data = pd.read_sql(sql_str, con)[[str(i) for i in range(193)]].to_numpy()
@@ -827,9 +893,7 @@ if __name__ == "__main__":
                 if forecasting_horizon not in required_forecasting_horizons:
                     required_forecasting_horizons.append(forecasting_horizon)
                 required_dates[forecasting_horizon].append(date)
-                required_indices[forecasting_horizon].append(
-                    date_idx
-                )
+                required_indices[forecasting_horizon].append(date_idx)
         for date_idx, date in enumerate(dates_calibration):
             if not os.path.isfile(
                 f"{results_folname}/{model}_{start}_{end}_{lookback}_{delivery_time}_{[forecasting_horizon]}_{trade_time}_{remove_zero_var}/calibration_{str((pd.to_datetime(date) - timedelta(days=1)).replace(hour=16) + timedelta(minutes=trade_time)).replace(':', ';')}_{forecasting_horizon}_{variable_set}_weights_{weighting_alpha}_window_{window_len}.csv"
