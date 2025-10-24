@@ -48,27 +48,24 @@ for model in args.models:
             continue
         for delivery_time in range(int(args.start_delivery), int(args.end_delivery)):
             trade_time = delivery_time * 15 + 8 * 60 - shift_trade
-            for variable_set in [11]:
-                joblist.append(
-                    [
-                        "python",
-                        "lasso_forecasting.py",
-                        "--model",
-                        model,
-                        "--trade_time",
-                        str(trade_time),
-                        "--delivery_time",
-                        str(delivery_time),
-                        "--variable_set",
-                        str(variable_set),
-                        "--calibration_window_len",
-                        str(args.calibration_window_len),
-                        "--processes",
-                        str(processes),
-                        "--special_results_directory",
-                        args.special_results_directory
-                    ]
-                )
+            joblist.append(
+                [
+                    "python",
+                    "forecasting_simulation.py",
+                    "--model",
+                    model,
+                    "--trade_time",
+                    str(trade_time),
+                    "--delivery_time",
+                    str(delivery_time),
+                    "--calibration_window_len",
+                    str(args.calibration_window_len),
+                    "--processes",
+                    str(processes),
+                    "--special_results_directory",
+                    args.special_results_directory
+                ]
+            )
 
     invoked = 0
     stack = []

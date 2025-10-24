@@ -22,7 +22,7 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-results_dir = os.path.join("RESULTS", "cSVR_SVR_LASSO_RF_MAE_ANALYSIS") # directory to save the results of MAE/QAPE analysis
+results_dir = os.path.join("RESULTS", "cSVR_LASSO_RF_MAE") # directory to save the results of MAE/QAPE analysis
 
 def mae_qape(Y, X, naive, measure_type="avg"):
     """MAE if measure_type is avg,"""
@@ -101,17 +101,14 @@ def prepare_mae_per_delivery(inp):
                         if args.errors_choice == "standard": # consider all of the prices
                             extreme_indices = range(len(actual))
                         else: # get only the extreme quantiles of price
-                            relative_surprise = np.full_like(actual, np.nan, dtype=float)
-                            valid = naive != 0 # we cannot calculate the relative surprise for naive = 0
-                            relative_surprise[valid] = np.abs((actual[valid] - naive[valid]) / naive[valid])
-                            relative_surprise[~valid] = np.nan
+                            relative_surprise = np.abs(actual - naive)
 
                             if extreme_quantile > 0.5:
-                                extreme_indices = relative_surprise > np.nanquantile( # will set False in place of comparison with NaN
+                                extreme_indices = relative_surprise > np.quantile( # will set False in place of comparison with NaN
                                     relative_surprise, extreme_quantile
                                 )
                             else:
-                                extreme_indices = relative_surprise < np.nanquantile( # will set False in place of comparison with NaN
+                                extreme_indices = relative_surprise < np.quantile( # will set False in place of comparison with NaN
                                     relative_surprise, extreme_quantile
                                 )
 

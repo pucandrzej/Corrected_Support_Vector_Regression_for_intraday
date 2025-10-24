@@ -10,7 +10,7 @@ try:
     os.chdir("Forecasting")  # for debugger run
 except:
     pass
-
+import shutil
 import pandas as pd
 from datetime import timedelta
 import numpy as np
@@ -92,8 +92,12 @@ def load_delivery_results(inp):
 
                             # for every forecast in test window create the average forecasts based on the weights
                             for _, date in enumerate(dates):
+                                base_path = os.path.join(
+                                    results_dir, f"{model}_2020-01-01_2020-12-31_427_{delivery}_[{forecasting_horizon}]_{trade_time}_True", f"test_{str((pd.to_datetime(date) - timedelta(days=1)).replace(hour=16) + timedelta(minutes=int(trade_time))).replace(':', ';')}_{forecasting_horizon}_11_weights_1.0_window_expanding.csv"
+                                )
+
                                 forecast = pd.read_csv(
-                                    os.path.join(results_dir, f"{model}_2020-01-01_2020-12-31_427_{delivery}_[{forecasting_horizon}]_{trade_time}_True", f"test_{str((pd.to_datetime(date) - timedelta(days=1)).replace(hour=16) + timedelta(minutes=int(trade_time))).replace(':', ';')}_{forecasting_horizon}_11_weights_1.0_window_expanding.csv"),
+                                    base_path,
                                     index_col=0,
                                 )
 
@@ -108,8 +112,14 @@ def load_delivery_results(inp):
                                 ]
 
                                 avg_result.to_csv(
-                                    os.path.join(results_dir, f"{model}_2020-01-01_2020-12-31_427_{delivery}_[{forecasting_horizon}]_{trade_time}_True", f"test_{str((pd.to_datetime(date) - timedelta(days=1)).replace(hour=16) + timedelta(minutes=int(trade_time))).replace(':', ';')}_{forecasting_horizon}_11_weights_1.0_window_expanding.csv"),
+                                    base_path.replace('.csv', '_TMP.csv'),
                                 )
+
+                                # remove the old base file
+                                if os.path.exists(base_path):
+                                    os.remove(base_path)
+                                # move the tmp to base file
+                                shutil.move(base_path.replace('.csv', '_TMP.csv'), base_path)
 
                             col_idx += 1
                         except Exception as err:
