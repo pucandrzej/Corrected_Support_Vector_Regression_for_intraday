@@ -1,7 +1,7 @@
 # Replication package for "Corrected Support Vector Regression for intraday point forecasting of prices in the continuous power market"
 
 ## Authors
-Andrzej Puć, Joanna Janczura, 
+Andrzej Puć, Joanna Janczura
 
 Wrocław University of Science and Technology, Faculty of Pure and Applied Mathematics, Hugo Steinhaus Center, Wyb. Wyspiańskiego 27, Wrocław, 50-370, Poland
 
@@ -12,10 +12,10 @@ andrzej.puc@pwr.edu.pl
 2025.10.27
 
 ## Overview & contents
-The code in this replication material allows to recalculate the forecasting simulation which served as an illustration to forecasting methodology proposed in the paper "Corrected Support Vector Regression for intraday point forecasting of prices in the continuous power market". 
+The code in this replication material allows for recalculating the forecasting simulation which served as an illustration of forecasting methodology proposed in the paper "Corrected Support Vector Regression for intraday point forecasting of prices in the continuous power market". 
 When the simulation is recalculated, each figure presented in the paper can be generated using `paper_figures_reproduction.ipynb` file. The notebook saves generated figures in the Paper_Figures directory.
 
-Alternatively, one can generate Figures from the paper using precomputed intermediary files by running the notebook right after downloading the repository.
+Alternatively, one can generate figures from the paper using precomputed intermediary files by running the notebook right after downloading the repository.
 **Please note that raw data used in the forecasting study is not fully publicly available. Thus, Figures 1 and 2 cannot be generated based solely on the contents of this repository.**
 
 ## Software requirements
@@ -26,13 +26,13 @@ These analyses were run on Python 3.11.
 `matplotlib==3.7.2`
 `sqlite3==2.6.0`
 
-while a full list of packages needed for recalculating the simulation can be found in requirements.txt file.
+while a full list of packages needed for recalculating the simulation can be found in the requirements.txt file.
 
 A full LaTeX installation is required. Requirements for text rendering with LaTeX in Matplotlib can be found here: [link](https://matplotlib.org/stable/users/explain/text/usetex.html).
 
 ## Data availability and provenance
 The raw data is stored in the `Data` directory. In this repository it contains the exogenous variables used in the forecasting study: crossborder physical flows, day-ahead quarter-hourly German market electricity prices, SPV and wind generation actual values and forecasts and load actual values and forecasts.
-All of the aforementioned data was sourced from ENTSOe. Necessary links and time of accessing the curve are provided in `META.txt` files in each subdirectory.
+All of the aforementioned data was sourced from ENTSOe. Necessary links and time of accessing the data are provided in `META.txt` files in each subdirectory.
 
 Two non-public directories are not attached in `Data`: `ID_auction_preprocessed/` and `Transactions/`. Data stored in these directories is a part of a package DE Trades on the continuous market - Histo (up to Y-1):
 https://webshop.eex-group.com/data-type/de-trades-continuous-market-histo-y-1. The data has been purchased from the EXPEX Spot under University License, under which the Contracting Party is entitled to a limited Internal Usage in unchanged format according to Section 3 of the General Conditions, specifically for educational and academic research purposes and publication of results of analysis and research. The Agreement with the EPEX Spot do not allow to transfer the data to third Parties. It can be accessed through EPEX Spot sFTP server. The yearly cost of this access is equal to 480EUR.
