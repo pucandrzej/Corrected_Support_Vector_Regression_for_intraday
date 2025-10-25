@@ -16,7 +16,7 @@ The code in this replication material allows for recalculating the forecasting s
 When the simulation is recalculated, each figure presented in the paper can be generated using `paper_figures_reproduction.ipynb` file. The notebook saves generated figures in the Paper_Figures directory.
 
 Alternatively, one can generate figures from the paper using precomputed intermediary files by running the notebook right after downloading the repository.
-**Please note that raw data used in the forecasting study is not fully publicly available. Thus, Figures 1 and 2 cannot be generated based solely on the contents of this repository.**
+**Please note that raw data used in the forecasting study is not fully publicly available. Thus, Figures 1, 2, A.9 and A.10 cannot be generated based solely on the contents of this repository.**
 
 ## Software requirements
 These analyses were run on Python 3.11.
