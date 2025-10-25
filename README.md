@@ -1,23 +1,27 @@
 # Replication package for "Corrected Support Vector Regression for intraday point forecasting of prices in the continuous power market"
-German continuous electricity market analysis, work done as part of PhD studies on Wroclaw University of Science and Technology
+German continuous electricity market analysis, work done as a part of PhD studies on Wroclaw University of Science and Technology
 
 ## Authors
 Andrzej Puć, Joanna Janczura, 
 
-Wrocław University of Science and Technology, Faculty of Pure and Applied Mathematics, Hugo Steinhaus Center, Wyb.
-Wyspiańskiego 27, Wrocław, 50-370, Poland
+Wrocław University of Science and Technology, Faculty of Pure and Applied Mathematics, Hugo Steinhaus Center, Wyb. Wyspiańskiego 27, Wrocław, 50-370, Poland
 
 ### Contact information
 andrzej.puc@pwr.edu.pl
 
 ## Date of replication package creation
-2025.10.23
+2025.10.26
 
 ## Overview & contents
-The code in this replication material allows to recalculate the forecasting simulation which served as an illustration to forecasting methodology proposed in the paper "Corrected Support Vector Regression for intraday point forecasting of prices in the continuous power market". When simulation is recalculated, each figure can be generated separately by its corresponding script file Figure_[xx]_*.py. As an exception, Figure_05_relative_mae.py also generates the only table - Table 2. The analysis files Figure_[xx]_*.py can be run individually, in any order.
+The code in this replication material allows to recalculate the forecasting simulation which served as an illustration to forecasting methodology proposed in the paper "Corrected Support Vector Regression for intraday point forecasting of prices in the continuous power market". 
+When simulation is recalculated, each figure can be generated using paper_figures_reproduction.ipynb file. The notebook saves generated figures in the Paper_Figures directory.
+
+Please note that raw data used in the forecasting study is not fully publicly available. Thus, Figures 1 and 2 cannot be generated based solely on the contents of this repository.
 
 ## Software requirements
 The computing environment, language(s), licence(s) and package(s) necessary to run the reproducibility check (as well as their version); If additional information is needed to emulate the necessary environment (e.g., with conda), it should also be provided.
+
+Requirements for text rendering with LaTeX in Matplotlib can be found here: [link](https://matplotlib.org/stable/users/explain/text/usetex.html).
 
 ## Data availability and provenance
 The data being used and its format. Any relevant information regarding access to the data, origin, pre-processing, usage restrictions, etc. is to be provided.
@@ -35,4 +39,4 @@ instruction
 - how to preprocess the data
 - how to run the simulation
 - how to add the weighted averaging
-- how to calculate the MAE aggregation
+- how to calculate the MAE aggregation (Note that the intel_avg_generator.py requires changing the configuration to )

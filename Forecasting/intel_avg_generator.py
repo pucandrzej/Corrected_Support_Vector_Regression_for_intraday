@@ -6,33 +6,29 @@ calculate the MAE of each model in the calibration window
 
 import os
 
-try:
-    os.chdir("Forecasting")  # for debugger run
-except:
-    pass
 import shutil
 import pandas as pd
 from datetime import timedelta
 import numpy as np
 from multiprocessing import Pool
 
-results_dir = "RESULTS/cSVR_SVR_LASSO_RF_FORECASTS"
+from forecasting_config import forecasting_config
+
+results_dir = forecasting_config["forecasting_results_dir"]
 cols_sets_to_average = [["prediction_1", "prediction_2", "prediction_7", "naive"]]
 models = ["kernel_hr_naive_mult", "lasso", "random_forest"]
 
 calibration_window_lens = [7, 14, 21, 28]  # test of several calibration windows for the intel. avg
 dates = pd.date_range("2020-01-01", "2020-12-31") # test window dates
 
-
 def my_mae(X, Y):
     return np.mean(np.abs(X - Y))
-
 
 def load_delivery_results(inp):
     delivery, horizons = inp
     print(f"Processing: {delivery}")
     for model in models:
-        for trade_vs_delivery_delta in [30, 60, 90, 120, 150, 180]:
+        for trade_vs_delivery_delta in forecasting_config['lead_times']:
             for forecasting_horizon in horizons:
                 col_idx = 20 # LEGACY col index
                 for cols_to_average in cols_sets_to_average:
@@ -127,11 +123,11 @@ def load_delivery_results(inp):
 
 
 if __name__ == "__main__":
-    deliveries = np.arange(96)
+    deliveries = forecasting_config['deliveries']
 
-    horizons = [30, 60, 90, 120, 150, 180, 210, 300, 390, 480]
+    horizons = forecasting_config['forecasting_horizons']
 
     inputlist = [(i, horizons) for i in deliveries]
 
-    with Pool(processes=32) as p:
+    with Pool(processes=forecasting_config['default_parallel_workers']) as p:
         _ = p.map(load_delivery_results, inputlist)

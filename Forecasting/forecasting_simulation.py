@@ -6,11 +6,6 @@ import pandas as pd
 import numpy as np
 import os
 import sys
-
-try:
-    os.chdir("Forecasting")  # for simple basic VS code debuger run
-except:
-    pass
 from numba import njit
 from datetime import datetime, timedelta
 import argparse

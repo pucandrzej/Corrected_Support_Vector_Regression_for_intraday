@@ -4,11 +4,11 @@ Script to run the simulation for the required configuration of distances before 
 
 import time
 import subprocess
-
 import sys
 
-import argparse
+from forecasting_config import forecasting_config
 
+import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--start_delivery", default=0, help="Start of the simulated deliveries"
@@ -30,7 +30,7 @@ parser.add_argument('--special_results_directory', default=None, help='Running o
 args = parser.parse_args()
 
 # additional parameters
-processes = 48
+processes = forecasting_config['default_parallel_workers']
 
 for model in args.models:
     start = args.start_delivery
@@ -43,7 +43,7 @@ for model in args.models:
         f"TOTAL_SIMU_LOG_{start}_{args.end_delivery}_{model}_{args.calibration_window_len}.txt",
         "w",
     )
-    for shift_trade in [60]:  # delivery time - shift_trade is the trade time
+    for shift_trade in forecasting_config['lead_times']:  # delivery time - shift_trade is the trade time
         if shift_trade != 60 and model != 'kernel_hr_naive_mult':
             continue
         for delivery_time in range(int(args.start_delivery), int(args.end_delivery)):

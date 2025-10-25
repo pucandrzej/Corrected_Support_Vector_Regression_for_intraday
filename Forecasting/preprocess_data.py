@@ -246,8 +246,8 @@ def preprocess_data(start, end, ID_qtrly, add_dummies):
     print("Cached data unavailable, preparing & saving the data.")
     try:
         df = pd.read_csv("../Data/preprocessed_dataset.csv")
-    except:
-        print("Preparing the initially preprocessed dataset...")
+    except Exception as err:
+        print(f"Failed to read the preprocessed_dataset.csv. Exception: {err}.\nPreparing the initially preprocessed dataset...")
         initial_preprocessing()
         print("Done.")
         df = pd.read_csv("../Data/preprocessed_dataset.csv")

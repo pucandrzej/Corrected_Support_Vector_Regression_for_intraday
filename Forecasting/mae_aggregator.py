@@ -7,8 +7,9 @@ from multiprocessing import Pool
 from scipy import stats
 from datetime import datetime
 
-import argparse
+from forecasting_config import forecasting_config
 
+import argparse
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--errors_choice",
@@ -22,7 +23,7 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-results_dir = os.path.join("RESULTS", "cSVR_LASSO_RF_MAE") # directory to save the results of MAE/QAPE analysis
+results_dir = forecasting_config['mae_aggregation_results_dir'] # directory to save the results of MAE/QAPE analysis
 
 def mae_qape(Y, X, naive, measure_type="avg"):
     """MAE if measure_type is avg,"""
@@ -54,7 +55,7 @@ def prepare_mae_per_delivery(inp):
     delivery, horizons, forecasts_dir = inp
     extreme_quantile = float(args.extreme_surprise_quantile)
     for measure_type in ["avg", "quantile_0.5", "quantile_0.25", "quantile_0.75"]:
-        for trade_vs_delivery_delta in [30, 60, 90, 120, 150, 180]:
+        for trade_vs_delivery_delta in forecasting_config['lead_times']:
             mae_results = {}
             for horizon in horizons:
                 mae_results[horizon] = {}
@@ -246,12 +247,12 @@ def prepare_mae_per_delivery(inp):
 
 
 if __name__ == "__main__":
-    forecasts_dir = os.path.join("RESULTS", "cSVR_SVR_LASSO_RF_FORECASTS") # source directory for forecasting results
+    forecasts_dir = forecasting_config['forecasting_results_dir']
     results_dirs = os.listdir(forecasts_dir)
 
-    deliveries = np.arange(96)
-    horizons = [30, 60, 90, 120, 150, 180, 210, 300, 390, 480]
+    deliveries = forecasting_config['deliveries']
+    horizons = forecasting_config['forecasting_horizons']
 
-    with Pool(processes=32) as p:
+    with Pool(processes=forecasting_config['default_parallel_workers']) as p:
         inputlist = [(i, horizons, forecasts_dir) for i in deliveries]
         _ = p.map(prepare_mae_per_delivery, inputlist)
