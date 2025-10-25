@@ -136,3 +136,4 @@ wcwidth==0.2.6
 Werkzeug==2.3.6
 widgetsnbextension==4.0.8
 wrapt==1.14.1
+sqlite3==2.6.0

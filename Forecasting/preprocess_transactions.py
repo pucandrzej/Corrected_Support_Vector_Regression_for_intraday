@@ -30,6 +30,7 @@ def is_date_of_DSTtransition(dt: datetime, zone: str) -> bool:
 
 
 def initial_preprocessing():
+    '''Clean the transactions to get the consistent datetime index and format from every year (handling reporting changes) and day (handling dst).'''
     if not os.path.exists("../Data/Transactions/price_analysis_table.csv"):
         # load the complete dataset
         if not os.path.exists("../Data/Transactions/concatenated_table.csv"):
@@ -242,6 +243,7 @@ def initial_preprocessing():
 
 
 def preprocess_data(start, end, ID_qtrly, add_dummies):
+    '''Prepare the 5min averages of transactions extended by intraday auction price from the left and last known transaction price from the right.'''
     demanded_len = 32 * 60  # daily data len (all minutes)
     print("Cached data unavailable, preparing & saving the data.")
     try:
