@@ -10,6 +10,7 @@ from datetime import datetime
 from forecasting_config import forecasting_config
 
 import argparse
+
 parser = argparse.ArgumentParser()
 parser.add_argument(
     "--errors_choice",
@@ -23,7 +24,10 @@ parser.add_argument(
 )
 args = parser.parse_args()
 
-results_dir = forecasting_config['mae_aggregation_results_dir'] # directory to save the results of MAE/QAPE analysis
+results_dir = forecasting_config[
+    "mae_aggregation_results_dir"
+]  # directory to save the results of MAE/QAPE analysis
+
 
 def mae_qape(Y, X, naive, measure_type="avg"):
     """MAE if measure_type is avg,"""
@@ -55,7 +59,7 @@ def prepare_mae_per_delivery(inp):
     delivery, horizons, forecasts_dir = inp
     extreme_quantile = float(args.extreme_surprise_quantile)
     for measure_type in ["avg", "quantile_0.5", "quantile_0.25", "quantile_0.75"]:
-        for trade_vs_delivery_delta in forecasting_config['lead_times']:
+        for trade_vs_delivery_delta in forecasting_config["lead_times"]:
             mae_results = {}
             for horizon in horizons:
                 mae_results[horizon] = {}
@@ -87,7 +91,9 @@ def prepare_mae_per_delivery(inp):
                                     fore.split("_")[1].split(" ")[0], "%Y-%m-%d"
                                 )
                             )
-                            df = pd.read_csv(os.path.join(forecasts_dir, fore_dir, fore))
+                            df = pd.read_csv(
+                                os.path.join(forecasts_dir, fore_dir, fore)
+                            )
                             try:
                                 actual.append(df.loc[0, "actual"])
                                 naive.append(df.loc[0, "naive"])
@@ -99,18 +105,26 @@ def prepare_mae_per_delivery(inp):
                         naive = np.array(naive)
                         all_dates = np.array(all_dates)
 
-                        if args.errors_choice == "standard": # consider all of the prices
+                        if (
+                            args.errors_choice == "standard"
+                        ):  # consider all of the prices
                             extreme_indices = range(len(actual))
-                        else: # get only the extreme quantiles of price
+                        else:  # get only the extreme quantiles of price
                             relative_surprise = np.abs(actual - naive)
 
                             if extreme_quantile > 0.5:
-                                extreme_indices = relative_surprise > np.quantile( # will set False in place of comparison with NaN
-                                    relative_surprise, extreme_quantile
+                                extreme_indices = (
+                                    relative_surprise
+                                    > np.quantile(  # will set False in place of comparison with NaN
+                                        relative_surprise, extreme_quantile
+                                    )
                                 )
                             else:
-                                extreme_indices = relative_surprise < np.quantile( # will set False in place of comparison with NaN
-                                    relative_surprise, extreme_quantile
+                                extreme_indices = (
+                                    relative_surprise
+                                    < np.quantile(  # will set False in place of comparison with NaN
+                                        relative_surprise, extreme_quantile
+                                    )
                                 )
 
                         if (
@@ -232,7 +246,10 @@ def prepare_mae_per_delivery(inp):
                     pickle.dump(
                         mae_results,
                         open(
-                            os.path.join(results_dir, f"{args.extreme_surprise_quantile}_relative_surprise_{measure_type}_mae_results_{trade_vs_delivery_delta}_{delivery}.pickle"),
+                            os.path.join(
+                                results_dir,
+                                f"{args.extreme_surprise_quantile}_relative_surprise_{measure_type}_mae_results_{trade_vs_delivery_delta}_{delivery}.pickle",
+                            ),
                             "wb",
                         ),
                     )
@@ -240,19 +257,22 @@ def prepare_mae_per_delivery(inp):
                     pickle.dump(
                         mae_results,
                         open(
-                            os.path.join(results_dir, f"{measure_type}_mae_results_{trade_vs_delivery_delta}_{delivery}.pickle"),
+                            os.path.join(
+                                results_dir,
+                                f"{measure_type}_mae_results_{trade_vs_delivery_delta}_{delivery}.pickle",
+                            ),
                             "wb",
                         ),
                     )
 
 
 if __name__ == "__main__":
-    forecasts_dir = forecasting_config['forecasting_results_dir']
+    forecasts_dir = forecasting_config["forecasting_results_dir"]
     results_dirs = os.listdir(forecasts_dir)
 
-    deliveries = forecasting_config['deliveries']
-    horizons = forecasting_config['forecasting_horizons']
+    deliveries = forecasting_config["deliveries"]
+    horizons = forecasting_config["forecasting_horizons"]
 
-    with Pool(processes=forecasting_config['default_parallel_workers']) as p:
+    with Pool(processes=forecasting_config["default_parallel_workers"]) as p:
         inputlist = [(i, horizons, forecasts_dir) for i in deliveries]
         _ = p.map(prepare_mae_per_delivery, inputlist)
